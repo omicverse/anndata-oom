@@ -146,18 +146,29 @@ class AnnDataOOM:
 
     @staticmethod
     def _convert_df(df_obj, names, index_name: str) -> pd.DataFrame:
-        """Convert an anndata_rs PyDataFrameElem to a pandas DataFrame."""
+        """Convert an anndata_rs PyDataFrameElem to a pandas DataFrame.
+
+        String columns are automatically converted to ``category`` dtype,
+        which typically reduces memory by 5-20x for large datasets with
+        repeated string values (cell types, donor IDs, etc.).
+        """
         pdf = None
 
-        # anndata_rs PyDataFrameElem: use df_obj[:] → Polars DataFrame → pandas
+        # anndata_rs PyDataFrameElem: use df_obj[:] → Polars DataFrame → pandas.
+        # Cast string columns to Categorical in Polars BEFORE to_pandas() so
+        # we never allocate full object-string columns (saves ~10× RAM on
+        # million-row datasets).
         try:
+            import polars as pl
             sl = df_obj[:]
-            if hasattr(sl, "to_pandas"):
+            if isinstance(sl, pl.DataFrame):
+                string_cols = [c for c in sl.columns if sl[c].dtype == pl.Utf8]
+                if string_cols:
+                    sl = sl.with_columns([pl.col(c).cast(pl.Categorical)
+                                          for c in string_cols])
                 pdf = sl.to_pandas()
-            else:
-                import polars as pl
-                if isinstance(sl, pl.DataFrame):
-                    pdf = sl.to_pandas()
+            elif hasattr(sl, "to_pandas"):
+                pdf = sl.to_pandas()
         except Exception:
             pass
 
@@ -170,6 +181,14 @@ class AnnDataOOM:
 
         if pdf is None:
             pdf = pd.DataFrame()
+
+        # Fallback — any remaining object columns become categorical
+        for col in pdf.columns:
+            if pdf[col].dtype == object:
+                try:
+                    pdf[col] = pdf[col].astype("category")
+                except Exception:
+                    pass
 
         # Set index from names (anndata_rs obs_names/var_names are plain lists)
         try:
@@ -807,18 +826,17 @@ class AnnDataOOM:
     # ------------------------------------------------------------------
 
     def obs_vector(self, key: str, *, layer: str | None = None) -> np.ndarray:
-        """Return a 1D array for a given gene (var name) or obs column."""
+        """Return a 1D array for a given gene (var name) or obs column.
+
+        For gene lookups, this extracts the column chunk-by-chunk so RAM
+        usage stays bounded even for million-cell datasets.
+        """
         if key in self._obs.columns:
             return self._obs[key].values
         # Must be a var name
         j = self._var.index.get_loc(key)
-        if layer is not None:
-            data = self._layers[layer][:, j]
-        else:
-            data = self._X[:, j]
-        if issparse(data):
-            data = data.toarray()
-        return np.asarray(data).ravel()
+        source = self._layers[layer] if layer is not None else self._X
+        return _extract_column(source, j, n_obs=self._n_obs)
 
     def var_vector(self, key: str, *, layer: str | None = None) -> np.ndarray:
         """Return a 1D array for a given obs name or var column."""
@@ -1258,3 +1276,25 @@ def _copy_axis_arrays(axis_arrays) -> dict:
     except Exception:
         pass
     return result
+
+
+def _extract_column(source, j: int, n_obs: int, chunk_size: int = 5000) -> np.ndarray:
+    """Extract column ``j`` from a BackedArray/ndarray/sparse matrix.
+
+    Streams through chunks so that the working memory stays bounded
+    (chunk_size × n_vars), which matters for million-cell datasets.
+    """
+    if isinstance(source, BackedArray):
+        result = np.empty(n_obs, dtype=np.float32)
+        for start, end, chunk in source.chunked(chunk_size):
+            if issparse(chunk):
+                col = chunk[:, j].toarray().ravel()
+            else:
+                col = np.asarray(chunk[:, j]).ravel()
+            result[start:end] = col
+        return result
+    # Fallback for plain arrays
+    col = source[:, j]
+    if issparse(col):
+        col = col.toarray()
+    return np.asarray(col).ravel()

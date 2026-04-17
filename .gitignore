@@ -41,3 +41,5 @@ env/
 # Test artifacts
 /tmp/
 test_*.h5ad
+data/
+tutorials/data/
