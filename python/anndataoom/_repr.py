@@ -171,6 +171,49 @@ def _preview_keys(keys: list, max_n: int = 5, sep: str = " · ") -> str:
     return preview
 
 
+def _fit_preview(keys: list, max_width: int, sep: str = " · ") -> str:
+    """Greedy fit of column-name preview into max_width visual columns.
+
+    Reserves room for a trailing "  +N" counter when overflow happens,
+    so the number of hidden entries is always visible.
+    """
+    if not keys:
+        return "–"
+    total = len(keys)
+    # Estimate worst-case suffix width: "  +N" where N ≤ total
+    suffix_reserve = len(f"  +{total}")
+    budget = max(max_width - suffix_reserve, 0)
+
+    fitted = []
+    used = 0
+    for k in keys:
+        name = str(k)
+        piece = (sep if fitted else "") + name
+        w = _wcswidth(piece)
+        if used + w > budget:
+            break
+        fitted.append(name)
+        used += w
+
+    if len(fitted) == total:
+        # Everything fits — no +N needed, reclaim the reserved space
+        return sep.join(fitted)
+    hidden = total - len(fitted)
+    text = sep.join(fitted)
+    # Append compact counter
+    suffix = f"  +{hidden}"
+    # If nothing fit at all, show at least one name with ellipsis
+    if not fitted:
+        name = str(keys[0])
+        if _wcswidth(name) + suffix_reserve > max_width:
+            # Truncate first name to fit
+            while _wcswidth(name) + suffix_reserve > max_width and len(name) > 1:
+                name = name[:-1]
+            name += "…"
+        return name + f"  +{total - 1}"
+    return text + suffix
+
+
 def _summary_line(storage: dict) -> str:
     parts = []
     if storage.get("x_format"):
@@ -259,9 +302,10 @@ def _format_text(adata) -> str:
     for name, keys in sections:
         n = len(keys)
         count = f"({n})" if n else "(–)"
-        preview = _preview_keys(keys) if keys else ""
-        row_content = f"▸ {name:<7s}{count:<5s}  {preview}"
-        lines.append(_row(row_content))
+        prefix = f"▸ {name:<7s}{count:<5s}  "
+        avail = _INNER - _wcswidth(prefix)
+        preview = _fit_preview(keys, avail) if keys else ""
+        lines.append(_row(prefix + preview))
 
     if adata.raw is not None:
         raw_shape = adata.raw.shape
