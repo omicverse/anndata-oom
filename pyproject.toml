@@ -9,7 +9,7 @@ module-name = "anndataoom._backend"
 
 [project]
 name = "anndataoom"
-version = "0.1.0"
+version = "0.1.1"
 description = "Out-of-memory AnnData powered by Rust (anndata-rs)"
 readme = "README.md"
 license = { file = "LICENSE" }

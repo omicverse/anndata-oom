@@ -339,75 +339,61 @@ _HTML_STYLE = """
 <style>
 .adoom {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 13px;
-    max-width: 820px;
+    font-size: 12px;
+    max-width: 640px;
     color: var(--jp-ui-font-color0, #1f2328);
     background: var(--jp-layout-color0, #ffffff);
     border: 1px solid var(--jp-border-color2, #d0d7de);
-    border-radius: 8px;
+    border-radius: 6px;
     overflow: hidden;
-    margin: 8px 0;
+    margin: 4px 0;
     font-variant-numeric: tabular-nums;
+    line-height: 1.4;
 }
 .adoom-head {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 16px;
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 6px 10px;
     background: var(--jp-layout-color1, #f6f8fa);
-    border-bottom: 1px solid var(--jp-border-color2, #d0d7de);
+    border-bottom: 1px solid var(--jp-border-color3, #eaeef2);
+    flex-wrap: wrap;
 }
-.adoom-title {
-    font-weight: 600; font-size: 14px;
+.adoom-head .title { font-weight: 600; font-size: 12px; }
+.adoom-head .dims {
+    font-size: 13px; font-weight: 600;
+    color: var(--jp-ui-font-color0, #1f2328);
+    letter-spacing: -0.01em;
 }
-.adoom-tag {
-    font-size: 11px; color: var(--jp-ui-font-color2, #656d76);
-    padding: 2px 10px;
+.adoom-head .dims-label {
+    font-size: 10px; font-weight: 400;
+    color: var(--jp-ui-font-color2, #656d76);
+    margin-left: 2px;
+}
+.adoom-head .dims-sep {
+    color: var(--jp-ui-font-color3, #8c959f);
+    font-weight: 300; margin: 0 2px;
+}
+.adoom-head .tag {
+    margin-left: auto;
+    font-size: 10px; color: var(--jp-ui-font-color2, #656d76);
+    padding: 1px 7px;
     background: var(--jp-layout-color2, #eaeef2);
-    border-radius: 12px;
-    letter-spacing: 0.02em;
+    border-radius: 10px;
 }
 .adoom-body {
-    display: flex; gap: 24px; padding: 18px 20px;
+    display: flex; gap: 10px; padding: 6px 10px;
     align-items: center;
     border-bottom: 1px solid var(--jp-border-color3, #eaeef2);
+    font-size: 11px;
 }
-.adoom-dims-storage {
-    flex: 1;
-    display: flex; flex-direction: column; gap: 12px;
-    min-width: 0;
+.adoom-body .summary {
+    flex: 1; color: var(--jp-ui-font-color1, #424a53);
+    overflow: hidden; text-overflow: ellipsis;
 }
-.adoom-dims {
-    display: flex; align-items: baseline; gap: 14px;
-    font-size: 26px; font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1;
-}
-.adoom-dims .label {
-    font-size: 11px; font-weight: 400;
-    color: var(--jp-ui-font-color2, #656d76);
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    margin-left: 6px;
-}
-.adoom-dims .sep {
-    color: var(--jp-ui-font-color3, #8c959f);
-    font-weight: 300; font-size: 22px;
-}
-.adoom-kv {
-    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px;
-    font-size: 12px;
-}
-.adoom-kv .k {
-    color: var(--jp-ui-font-color2, #656d76);
-    font-size: 10px; letter-spacing: 0.04em;
-    text-transform: uppercase;
-    align-self: center;
-}
-.adoom-kv .v { color: var(--jp-ui-font-color0, #1f2328); }
-.adoom-kv code {
+.adoom-body code {
     font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-    font-size: 11px; padding: 1px 6px;
-    background: var(--jp-layout-color1, #f6f8fa);
-    border-radius: 3px;
+    font-size: 10px; padding: 0 3px;
+    background: var(--jp-layout-color2, #eaeef2);
+    border-radius: 2px;
 }
 .adoom-viz { flex-shrink: 0; }
 .adoom-sections { display: flex; flex-direction: column; }
@@ -418,50 +404,54 @@ _HTML_STYLE = """
 .adoom-sec:nth-child(odd) { background: var(--jp-layout-color1, #f6f8fa); }
 .adoom-sec > summary {
     cursor: pointer; list-style: none;
-    padding: 8px 20px;
-    display: flex; align-items: center; gap: 10px;
+    padding: 3px 10px;
+    display: flex; align-items: center; gap: 8px;
     transition: background 0.1s;
+    font-size: 11px;
 }
 .adoom-sec > summary::-webkit-details-marker { display: none; }
 .adoom-sec > summary::marker { content: ""; }
 .adoom-sec > summary:hover {
     background: var(--jp-layout-color2, rgba(208,215,222,0.5));
 }
-.adoom-sec.empty > summary { cursor: default; color: var(--jp-ui-font-color3, #8c959f); }
-.adoom-sec.empty > summary:hover { background: inherit; }
+.adoom-sec.muted > summary {
+    cursor: default; color: var(--jp-ui-font-color3, #8c959f);
+    font-size: 10px;
+}
+.adoom-sec.muted > summary:hover { background: inherit; }
 .adoom-chev {
     color: var(--jp-ui-font-color3, #8c959f);
     transition: transform 0.15s ease;
-    width: 10px; display: inline-block;
-    font-size: 11px;
+    width: 8px; display: inline-block;
+    font-size: 10px;
 }
 .adoom-sec[open] > summary > .adoom-chev { transform: rotate(90deg); }
-.adoom-sec.empty > summary > .adoom-chev { visibility: hidden; }
-.adoom-sec-name { font-weight: 500; min-width: 64px; }
+.adoom-sec.muted > summary > .adoom-chev { visibility: hidden; }
+.adoom-sec-name { font-weight: 500; min-width: 48px; }
 .adoom-sec-count {
     color: var(--jp-ui-font-color2, #656d76);
-    font-size: 11px; min-width: 34px; text-align: right;
+    font-size: 10px; min-width: 26px; text-align: right;
     font-variant-numeric: tabular-nums;
 }
 .adoom-sec-preview {
     color: var(--jp-ui-font-color2, #656d76);
-    font-size: 12px;
+    font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     flex: 1;
 }
-.adoom-sec-body { padding: 0 20px 12px 54px; }
+.adoom-sec-body { padding: 0 10px 6px 32px; }
 .adoom-sec-body table {
-    border-collapse: collapse; font-size: 11px; width: 100%;
+    border-collapse: collapse; font-size: 10px; width: 100%;
 }
 .adoom-sec-body td, .adoom-sec-body th {
-    padding: 4px 10px; text-align: left;
+    padding: 2px 8px; text-align: left;
 }
 .adoom-sec-body tr:nth-child(even) {
     background: var(--jp-layout-color2, rgba(208,215,222,0.25));
 }
 .adoom-sec-body th {
     font-weight: 500; color: var(--jp-ui-font-color2, #656d76);
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em;
     border-bottom: 1px solid var(--jp-border-color3, #eaeef2);
 }
 .adoom-sec-body code {
@@ -469,19 +459,19 @@ _HTML_STYLE = """
     font-size: 10px;
 }
 .adoom-chain {
-    padding: 6px 20px 12px 54px;
+    padding: 4px 10px 6px 32px;
     font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-    font-size: 11px;
+    font-size: 10px;
 }
 .adoom-chain-row {
     display: grid;
-    grid-template-columns: 28px 82px 140px auto;
-    gap: 10px; padding: 3px 0;
+    grid-template-columns: 22px 70px 130px auto;
+    gap: 8px; padding: 1px 0;
     align-items: center;
 }
 .adoom-chain-tag {
-    padding: 1px 7px; border-radius: 3px; font-weight: 500;
-    font-size: 10px; text-align: center; letter-spacing: 0.02em;
+    padding: 0 5px; border-radius: 2px; font-weight: 500;
+    font-size: 9px; text-align: center; letter-spacing: 0.02em;
 }
 .tag-backed    { background: rgba(100, 116, 139, 0.15); color: #475569; }
 .tag-subset    { background: rgba(217, 119,   6, 0.15); color: #92400e; }
@@ -497,84 +487,64 @@ def _escape(s: str) -> str:
 
 
 def _svg_matrix_viz(n_obs: int, n_vars: int, density: float | None) -> str:
-    """Small SVG showing the matrix as a rectangle with chunk bands and
-    density dots. Aspect ratio is dampened via sqrt so million-row × 30k-col
-    matrices still render as visible rectangles."""
+    """Compact inline matrix visualisation (rectangle + chunk bands +
+    density dots). No axis labels — the shape numbers already appear
+    in the header. Total SVG size ≤ 56 × 34 px."""
     import math
 
     w_logical = max(n_vars, 1)
     h_logical = max(n_obs, 1)
     ratio_h = math.sqrt(h_logical / max(w_logical, 1))
-    aspect = max(0.3, min(2.4, ratio_h))
+    aspect = max(0.4, min(1.8, ratio_h))
 
-    MAX = 120
+    MAX = 44
     if aspect >= 1:
         W = int(MAX / aspect)
         H = MAX
     else:
         W = MAX
         H = int(MAX * aspect)
-    W = max(W, 48)
-    H = max(H, 48)
+    W = max(W, 20)
+    H = max(H, 20)
 
-    border = "#656d76"
+    border = "#8c959f"
     band = "#d0d7de"
     dot = "#1d4ed8"
-    label = "#656d76"
 
-    svg_w = W + 58
-    svg_h = H + 36
-    x0 = 28  # leave room for rotated y-axis label
-    y0 = 4
+    PAD = 2
+    svg_w = W + PAD * 2
+    svg_h = H + PAD * 2
 
     parts = [
         f'<svg class="adoom-viz" viewBox="0 0 {svg_w} {svg_h}" '
         f'width="{svg_w}" height="{svg_h}" xmlns="http://www.w3.org/2000/svg">'
     ]
-
-    # Outer rectangle
     parts.append(
-        f'<rect x="{x0}" y="{y0}" width="{W}" height="{H}" fill="white" '
-        f'stroke="{border}" stroke-width="1" rx="2"/>'
+        f'<rect x="{PAD}" y="{PAD}" width="{W}" height="{H}" fill="white" '
+        f'stroke="{border}" stroke-width="0.7" rx="1"/>'
     )
 
-    # Chunk bands
-    n_bands = min(10, max(2, H // 10))
+    # Chunk bands — 6 horizontal lines
+    n_bands = 6
     band_h = H / n_bands
     for i in range(1, n_bands):
-        y = y0 + i * band_h
+        y = PAD + i * band_h
         parts.append(
-            f'<line x1="{x0}" y1="{y:.1f}" x2="{x0+W}" y2="{y:.1f}" '
-            f'stroke="{band}" stroke-width="0.4" stroke-dasharray="2,2"/>'
+            f'<line x1="{PAD}" y1="{y:.1f}" x2="{PAD+W}" y2="{y:.1f}" '
+            f'stroke="{band}" stroke-width="0.3"/>'
         )
 
-    # Density dots (deterministic)
     if density is not None and density > 0:
         import random
         rng = random.Random(hash((n_obs, n_vars, round(density, 4))))
-        n_dots = min(int(density * 250), 200)
+        n_dots = min(int(density * 60), 60)
         for _ in range(n_dots):
-            x = x0 + rng.random() * W
-            y = y0 + rng.random() * H
+            x = PAD + rng.random() * W
+            y = PAD + rng.random() * H
             parts.append(
-                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="0.9" '
-                f'fill="{dot}" opacity="0.55"/>'
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="0.5" '
+                f'fill="{dot}" opacity="0.6"/>'
             )
-
-    # Labels
-    n_obs_text = f"{n_obs:,} obs"
-    n_vars_text = f"{n_vars:,} vars"
-    parts.append(
-        f'<text x="14" y="{y0 + H/2:.1f}" text-anchor="middle" '
-        f'transform="rotate(-90 14 {y0 + H/2:.1f})" '
-        f'font-size="9" fill="{label}" font-family="-apple-system, sans-serif">'
-        f'{n_obs_text}</text>'
-    )
-    parts.append(
-        f'<text x="{x0 + W/2:.1f}" y="{y0 + H + 20}" text-anchor="middle" '
-        f'font-size="9" fill="{label}" font-family="-apple-system, sans-serif">'
-        f'{n_vars_text}</text>'
-    )
 
     parts.append('</svg>')
     return "".join(parts)
@@ -589,57 +559,45 @@ def _format_html(adata) -> str:
 
     parts = [_HTML_STYLE, '<div class="adoom">']
 
+    # Compact single-row header: title · dims · tag
+    parts.append('<div class="adoom-head">')
+    parts.append('<span class="title">AnnDataOOM</span>')
     parts.append(
-        f'<div class="adoom-head">'
-        f'<span class="adoom-title">AnnDataOOM</span>'
-        f'<span class="adoom-tag">{_escape(tag)}</span>'
-        f'</div>'
+        f'<span class="dims">{adata.n_obs:,}<span class="dims-label">obs</span>'
+        f'<span class="dims-sep">×</span>{adata.n_vars:,}<span class="dims-label">vars</span></span>'
     )
+    parts.append(f'<span class="tag">{_escape(tag)}</span>')
+    parts.append('</div>')
 
-    # Body row: dims + kv | SVG
-    parts.append('<div class="adoom-body">')
-    parts.append('<div class="adoom-dims-storage">')
-    parts.append(
-        f'<div class="adoom-dims">'
-        f'<span>{adata.n_obs:,}<span class="label">obs</span></span>'
-        f'<span class="sep">×</span>'
-        f'<span>{adata.n_vars:,}<span class="label">vars</span></span>'
-        f'</div>'
-    )
-
-    kv_rows = []
+    # Single-row body: summary line + tiny SVG
+    summary_parts = []
     if storage.get("x_format"):
-        v = f'<code>{_escape(storage["x_format"])}</code> · {_escape(storage.get("x_dtype") or "?")}'
+        s = f'<code>{_escape(storage["x_format"])}</code>'
+        if storage.get("x_dtype"):
+            s += f' {_escape(storage["x_dtype"])}'
         d = storage.get("density")
         if d is not None and d < 1.0:
-            v += f' · {d*100:.1f}% density'
-        kv_rows.append(("X", v))
+            s += f' · {d*100:.1f}%'
+        summary_parts.append(s)
     chunk_mb = storage.get("chunk_mb")
-    sample_rows = storage.get("sample_chunk_rows")
-    if chunk_mb is not None and sample_rows:
-        kv_rows.append(("Chunk", f'~{chunk_mb:.1f} MB / {sample_rows:,} rows'))
+    if chunk_mb is not None:
+        summary_parts.append(f'~{chunk_mb:.1f} MB/chunk')
+    if storage.get("file_size_mb"):
+        summary_parts.append(f'{storage["file_size_mb"]:.0f} MB disk')
     if storage.get("filename"):
-        fn = storage["filename"]
-        sz = storage.get("file_size_mb")
-        v = f'<code>{_escape(os.path.basename(fn))}</code>'
-        if sz:
-            v += f' · {sz:.1f} MB'
-        kv_rows.append(("File", v))
+        summary_parts.append(f'<code>{_escape(os.path.basename(storage["filename"]))}</code>')
 
-    if kv_rows:
-        parts.append('<div class="adoom-kv">')
-        for k, v in kv_rows:
-            parts.append(f'<span class="k">{_escape(k)}</span><span class="v">{v}</span>')
-        parts.append('</div>')
-
-    parts.append('</div>')  # /dims-storage
+    parts.append('<div class="adoom-body">')
+    parts.append(
+        f'<span class="summary">{" · ".join(summary_parts) if summary_parts else "(no X info)"}</span>'
+    )
     parts.append(_svg_matrix_viz(adata.n_obs, adata.n_vars, storage.get("density")))
-    parts.append('</div>')  # /body
+    parts.append('</div>')
 
-    # Sections
+    # Sections — non-empty first, empty ones merged into one muted row
     parts.append('<div class="adoom-sections">')
 
-    meta_sections = [
+    all_sections = [
         ("obs", list(adata.obs.columns), lambda: _render_df_table(adata.obs)),
         ("var", list(adata.var.columns), lambda: _render_df_table(adata.var)),
         ("obsm", list(adata.obsm.keys()), lambda: _render_axis_arrays(adata.obsm)),
@@ -649,29 +607,33 @@ def _format_html(adata) -> str:
         ("layers", list(adata.layers.keys()) if hasattr(adata.layers, "keys") else [],
          lambda: _render_axis_arrays(adata.layers)),
     ]
-    for name, keys, renderer in meta_sections:
+
+    # raw is special — treat it as a pseudo-section
+    has_raw = adata.raw is not None
+
+    chev = '<span class="adoom-chev">›</span>'
+
+    empty_names = []
+    for name, keys, renderer in all_sections:
         n = len(keys)
-        empty_cls = " empty" if n == 0 else ""
-        count_str = f'{n}' if n else '–'
-        preview_txt = _preview_keys(keys, 6) if n > 0 else ""
-        chev = '<span class="adoom-chev">›</span>'
-        parts.append(f'<details class="adoom-sec{empty_cls}">')
+        if n == 0:
+            empty_names.append(name)
+            continue
+        preview_txt = _preview_keys(keys, 6)
+        parts.append('<details class="adoom-sec">')
         parts.append(
             f'<summary>{chev}'
             f'<span class="adoom-sec-name">{_escape(name)}</span>'
-            f'<span class="adoom-sec-count">{count_str}</span>'
+            f'<span class="adoom-sec-count">{n}</span>'
             f'<span class="adoom-sec-preview">{_escape(preview_txt)}</span>'
             f'</summary>'
         )
-        if n > 0:
-            parts.append('<div class="adoom-sec-body">')
-            parts.append(renderer())
-            parts.append('</div>')
-        parts.append('</details>')
+        parts.append('<div class="adoom-sec-body">')
+        parts.append(renderer())
+        parts.append('</div></details>')
 
-    # raw
-    chev = '<span class="adoom-chev">›</span>'
-    if adata.raw is not None:
+    # raw — show when non-empty, add to empty list when absent
+    if has_raw:
         raw_shape = adata.raw.shape
         parts.append('<details class="adoom-sec">')
         parts.append(
@@ -679,20 +641,24 @@ def _format_html(adata) -> str:
             f'<span class="adoom-sec-name">raw</span>'
             f'<span class="adoom-sec-count">1</span>'
             f'<span class="adoom-sec-preview">{raw_shape[0]:,} × {raw_shape[1]:,} (pre-subset)</span>'
-            f'</summary>'
-            f'</details>'
+            f'</summary></details>'
         )
     else:
-        parts.append(
-            '<details class="adoom-sec empty">'
-            f'<summary>{chev}'
-            '<span class="adoom-sec-name">raw</span>'
-            '<span class="adoom-sec-count">–</span>'
-            '<span class="adoom-sec-preview"></span>'
-            '</summary></details>'
-        )
+        empty_names.append("raw")
 
-    # Transform chain
+    # Merged empty row — a non-expandable details (no body) so CSS selectors work
+    if empty_names:
+        parts.append('<details class="adoom-sec muted">')
+        parts.append(
+            f'<summary>{chev}'
+            f'<span class="adoom-sec-name">empty</span>'
+            f'<span class="adoom-sec-count">–</span>'
+            f'<span class="adoom-sec-preview">{_escape(" · ".join(empty_names))}</span>'
+            f'</summary>'
+        )
+        parts.append('</details>')
+
+    # Transform chain — only show when non-trivial
     if len(chain) > 1:
         parts.append('<details class="adoom-sec" open>')
         parts.append(
