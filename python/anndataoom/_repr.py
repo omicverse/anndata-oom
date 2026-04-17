@@ -689,7 +689,7 @@ def _format_html(adata) -> str:
 
 def _render_df_table(df) -> str:
     parts = ['<table><thead><tr><th>name</th><th>dtype</th><th>preview</th></tr></thead><tbody>']
-    for col in list(df.columns)[:20]:
+    for col in list(df.columns):
         try:
             series = df[col]
             dtype = str(series.dtype)
@@ -708,8 +708,6 @@ def _render_df_table(df) -> str:
             )
         except Exception:
             pass
-    if len(df.columns) > 20:
-        parts.append(f'<tr><td colspan="3"><em>+{len(df.columns) - 20} more</em></td></tr>')
     parts.append('</tbody></table>')
     return "".join(parts)
 
