@@ -559,15 +559,19 @@ class AnnDataOOM:
         # obs / var — after row slicing, prune unused categories so a subset
         # doesn't carry the full category list of the parent (matches anndata
         # behaviour and keeps legends/palettes clean for downstream plots).
+        #
+        # When the axis is not sliced we use a shallow (Copy-on-Write) copy —
+        # a deep copy of a 1M-row obs DataFrame can take seconds and the
+        # subset never mutates these columns in-place on this axis.
         if is_obs_all:
-            new._obs = self._obs.copy()
+            new._obs = self._obs.copy(deep=False)
         else:
             new._obs = self._obs.iloc[obs_int].reset_index(drop=True)
             new._obs.index = self._obs.index[obs_int]
             _drop_unused_categories(new._obs)
 
         if is_var_all:
-            new._var = self._var.copy()
+            new._var = self._var.copy(deep=False)
         else:
             new._var = self._var.iloc[var_int].reset_index(drop=True)
             new._var.index = self._var.index[var_int]
