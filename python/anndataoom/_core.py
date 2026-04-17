@@ -626,18 +626,18 @@ class AnnDataOOM:
         if isinstance(idx, pd.Series):
             idx = idx.values
 
-        if isinstance(idx, (list, np.ndarray)):
-            arr = np.asarray(idx)
-            if arr.dtype == bool:
-                return np.where(arr)[0]
-            if arr.dtype.kind in ("U", "S", "O"):
-                # String array — resolve names to positions
-                return np.array([df.index.get_loc(name) for name in arr])
-            return arr.astype(int)
+        # Convert pandas Index / tuple / any iterable to ndarray
+        if isinstance(idx, pd.Index):
+            idx = idx.values
+        elif isinstance(idx, tuple):
+            idx = list(idx)
 
         arr = np.asarray(idx)
         if arr.dtype == bool:
             return np.where(arr)[0]
+        if arr.dtype.kind in ("U", "S", "O"):
+            # String array — resolve names to positions
+            return np.array([df.index.get_loc(str(name)) for name in arr])
         return arr.astype(int)
 
     # ------------------------------------------------------------------
@@ -888,15 +888,20 @@ class AnnDataOOM:
             # Write X
             if 'X' in f:
                 del f['X']
+            # HDF5 chunks must have positive dimensions; fall back to contiguous
+            # layout if either axis is zero (e.g. after an empty subset).
+            use_chunks = n_obs > 0 and n_vars > 0
             ds = f.create_dataset(
                 'X', shape=(n_obs, n_vars), dtype=np.float32,
-                chunks=(min(1000, n_obs), n_vars),
-                compression='gzip', compression_opts=1,
+                chunks=(min(1000, n_obs), n_vars) if use_chunks else None,
+                compression='gzip' if use_chunks else None,
+                compression_opts=1 if use_chunks else None,
             )
-            for start, end, chunk in self._X.chunked(1000):
-                if issparse(chunk):
-                    chunk = chunk.toarray()
-                ds[start:end] = np.asarray(chunk, dtype=np.float32)
+            if n_obs > 0 and n_vars > 0:
+                for start, end, chunk in self._X.chunked(1000):
+                    if issparse(chunk):
+                        chunk = chunk.toarray()
+                    ds[start:end] = np.asarray(chunk, dtype=np.float32)
 
             # Write layers
             if 'layers' not in f:
@@ -906,11 +911,15 @@ class AnnDataOOM:
                 lpath = f'layers/{key}'
                 if lpath in f:
                     del f[lpath]
+                use_chunks_l = n_obs > 0 and n_vars > 0
                 ds_l = f.create_dataset(
                     lpath, shape=(n_obs, n_vars), dtype=np.float32,
-                    chunks=(min(1000, n_obs), n_vars),
-                    compression='gzip', compression_opts=1,
+                    chunks=(min(1000, n_obs), n_vars) if use_chunks_l else None,
+                    compression='gzip' if use_chunks_l else None,
+                    compression_opts=1 if use_chunks_l else None,
                 )
+                if not use_chunks_l:
+                    continue
                 if isinstance(layer, BackedArray):
                     for start, end, chunk in layer.chunked(1000):
                         if issparse(chunk):
