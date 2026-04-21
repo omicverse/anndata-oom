@@ -1070,13 +1070,6 @@ class AnnDataOOM:
                 f"\n    var: {list(self._var.columns)[:5]}"
             )
 
-    def _repr_html_(self) -> str:
-        try:
-            from . import _repr
-            return _repr._format_html(self)
-        except Exception:
-            return f"<pre>{self.__repr__()}</pre>"
-
     def __del__(self):
         try:
             self.close()
