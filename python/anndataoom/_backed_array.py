@@ -295,8 +295,21 @@ class BackedArray:
     # Sparse-specific helpers
     # ------------------------------------------------------------------
 
-    def sum(self, axis: int = 0, chunk_size: int = DEFAULT_CHUNK_SIZE) -> np.ndarray:
-        """Chunked sum along axis without full materialization."""
+    def sum(
+        self,
+        axis: int = 0,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        keepdims: bool = False,
+    ) -> np.ndarray:
+        """Chunked sum along axis without full materialization.
+
+        ``keepdims`` mirrors the numpy API — when True, axis 0 returns
+        shape ``(1, n_vars)`` and axis 1 returns ``(n_obs, 1)`` so the
+        result broadcasts against the original matrix. Code such as
+        ``X / X.sum(axis=1, keepdims=True)`` (standard TF-IDF / per-row
+        normalisation) works on a ``BackedArray`` the same way it works
+        on a numpy ndarray or a ``scipy.sparse`` matrix.
+        """
         if axis == 0:
             # Column sums: accumulate across row chunks
             result = np.zeros(self._shape[1], dtype=np.float64)
@@ -305,7 +318,7 @@ class BackedArray:
                     result += np.asarray(chunk.sum(axis=0)).ravel()
                 else:
                     result += chunk.sum(axis=0)
-            return result
+            return result.reshape(1, -1) if keepdims else result
         elif axis == 1:
             # Row sums: compute per chunk, concatenate
             result = np.empty(self._shape[0], dtype=np.float64)
@@ -314,11 +327,16 @@ class BackedArray:
                     result[start:end] = np.asarray(chunk.sum(axis=1)).ravel()
                 else:
                     result[start:end] = chunk.sum(axis=1)
-            return result
+            return result.reshape(-1, 1) if keepdims else result
         else:
             raise ValueError(f"axis must be 0 or 1, got {axis}")
 
-    def getnnz(self, axis: int = 0, chunk_size: int = DEFAULT_CHUNK_SIZE) -> np.ndarray:
+    def getnnz(
+        self,
+        axis: int = 0,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        keepdims: bool = False,
+    ) -> np.ndarray:
         """Chunked non-zero count along axis."""
         if axis == 0:
             result = np.zeros(self._shape[1], dtype=np.int64)
@@ -327,7 +345,7 @@ class BackedArray:
                     result += np.asarray((chunk != 0).sum(axis=0)).ravel()
                 else:
                     result += (chunk != 0).sum(axis=0)
-            return result
+            return result.reshape(1, -1) if keepdims else result
         elif axis == 1:
             result = np.empty(self._shape[0], dtype=np.int64)
             for start, end, chunk in self.chunked(chunk_size):
@@ -335,13 +353,18 @@ class BackedArray:
                     result[start:end] = np.asarray((chunk != 0).sum(axis=1)).ravel()
                 else:
                     result[start:end] = (chunk != 0).sum(axis=1)
-            return result
+            return result.reshape(-1, 1) if keepdims else result
         else:
             raise ValueError(f"axis must be 0 or 1, got {axis}")
 
-    def mean(self, axis: int = 0, chunk_size: int = DEFAULT_CHUNK_SIZE) -> np.ndarray:
+    def mean(
+        self,
+        axis: int = 0,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        keepdims: bool = False,
+    ) -> np.ndarray:
         """Chunked mean along axis."""
-        s = self.sum(axis=axis, chunk_size=chunk_size)
+        s = self.sum(axis=axis, chunk_size=chunk_size, keepdims=keepdims)
         n = self._shape[1 - axis]  # divide by the other dimension
         return s / max(n, 1)
 
