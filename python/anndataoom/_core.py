@@ -147,8 +147,14 @@ class AnnDataOOM:
                 except Exception:
                     pass
 
-        # raw
+        # raw — h5ad files may carry a `/raw` group (pre-HVG counts).
+        # The Rust backend doesn't surface it, so load it lazily via h5py.
         self._raw: AnnDataOOM | _FrozenRaw | None = None
+        if self._origin_file is not None:
+            try:
+                self._raw = _load_raw_from_h5ad(self._origin_file, self._n_obs)
+            except Exception as e:
+                logger.debug("Failed to load .raw from %s: %r", self._origin_file, e)
 
     # ------------------------------------------------------------------
     # DataFrame conversion
@@ -626,8 +632,13 @@ class AnnDataOOM:
         else:
             new._layers = self._layers
 
-        # raw
-        new._raw = self._raw
+        # raw — subset along obs so raw.X stays row-aligned with new.obs.
+        # Vars are intentionally preserved so HVG filtering on the parent
+        # still exposes all genes through .raw (the anndata convention).
+        if self._raw is not None and obs_int is not None and hasattr(self._raw, "_subset_obs"):
+            new._raw = self._raw._subset_obs(obs_int)
+        else:
+            new._raw = self._raw
 
         return new
 
@@ -1039,6 +1050,140 @@ class AnnDataOOM:
                         arr = arr.toarray()
                     ds_l[:] = arr.astype(np.float32)
 
+            # Persist .raw, if present
+            if self._raw is not None:
+                self._write_raw(f)
+
+    def _write_raw(self, f) -> None:
+        """Persist ``self._raw`` into the open h5py file ``f`` under /raw."""
+        try:
+            import anndata.io as aio
+        except Exception:
+            return
+
+        raw = self._raw
+        if "raw" in f:
+            del f["raw"]
+        grp = f.create_group("raw")
+        grp.attrs["encoding-type"] = "raw"
+        grp.attrs["encoding-version"] = "0.1.0"
+
+        # var
+        try:
+            var_df = raw.var.copy() if hasattr(raw, "var") else pd.DataFrame()
+            aio.write_elem(grp, "var", var_df)
+        except Exception:
+            pass
+
+        # varm (optional)
+        try:
+            varm = dict(getattr(raw, "varm", {}) or {})
+            if varm:
+                varm_grp = grp.create_group("varm")
+                varm_grp.attrs["encoding-type"] = "dict"
+                varm_grp.attrs["encoding-version"] = "0.1.0"
+                for k, v in varm.items():
+                    try:
+                        aio.write_elem(varm_grp, str(k), v)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # X — stream to avoid loading the full raw matrix into RAM.
+        try:
+            X_src = raw.X if hasattr(raw, "X") else raw._X
+            shape = tuple(getattr(X_src, "shape", (0, 0)))
+            n_obs, n_vars = int(shape[0]), int(shape[1])
+
+            # Detect sparsity by sampling a tiny chunk.
+            sample = None
+            if isinstance(X_src, BackedArray):
+                try:
+                    sample = next(iter(X_src.chunked(min(64, max(n_obs, 1)))), None)
+                    sample = sample[2] if sample is not None else None
+                except Exception:
+                    sample = None
+            else:
+                try:
+                    sample = X_src[0:min(64, n_obs)]
+                except Exception:
+                    sample = None
+            sparse_out = sample is not None and issparse(sample)
+
+            if sparse_out:
+                # Stream chunks → CSR on disk, accumulating indptr/indices/data
+                # so we never materialise the whole raw matrix.
+                from scipy.sparse import csr_matrix as _csr
+                indptr_parts: list[np.ndarray] = [np.zeros(1, dtype=np.int64)]
+                indices_chunks: list[np.ndarray] = []
+                data_chunks: list[np.ndarray] = []
+                running = 0
+
+                if isinstance(X_src, BackedArray):
+                    chunks_iter = X_src.chunked(1000)
+                else:
+                    # Single-shot fallback for in-memory arrays
+                    src = X_src[:] if hasattr(X_src, "__getitem__") else X_src
+                    chunks_iter = [(0, n_obs, src)]
+
+                for _s, _e, chunk in chunks_iter:
+                    if not issparse(chunk):
+                        chunk = _csr(chunk)
+                    else:
+                        chunk = chunk.tocsr()
+                    row_nnz = np.diff(chunk.indptr)
+                    # Offset each row's cumulative nnz by the running total.
+                    indptr_parts.append(np.cumsum(row_nnz) + running)
+                    running += int(chunk.indices.shape[0])
+                    indices_chunks.append(chunk.indices.astype(np.int32, copy=False))
+                    data_chunks.append(chunk.data.astype(np.float32, copy=False))
+
+                indices_arr = (
+                    np.concatenate(indices_chunks)
+                    if indices_chunks else np.empty(0, dtype=np.int32)
+                )
+                data_arr = (
+                    np.concatenate(data_chunks)
+                    if data_chunks else np.empty(0, dtype=np.float32)
+                )
+                indptr_arr = np.concatenate(indptr_parts).astype(np.int64, copy=False)
+
+                X_grp = grp.create_group("X")
+                X_grp.attrs["encoding-type"] = "csr_matrix"
+                X_grp.attrs["encoding-version"] = "0.1.0"
+                X_grp.attrs["shape"] = np.array([n_obs, n_vars], dtype=np.int64)
+                X_grp.create_dataset("data", data=data_arr, compression="gzip", compression_opts=1)
+                X_grp.create_dataset(
+                    "indices", data=indices_arr, compression="gzip", compression_opts=1
+                )
+                X_grp.create_dataset(
+                    "indptr", data=indptr_arr, compression="gzip", compression_opts=1
+                )
+            else:
+                use_chunks_r = n_obs > 0 and n_vars > 0
+                ds_r = grp.create_dataset(
+                    "X", shape=(n_obs, n_vars), dtype=np.float32,
+                    chunks=(min(1000, n_obs), n_vars) if use_chunks_r else None,
+                    compression="gzip" if use_chunks_r else None,
+                    compression_opts=1 if use_chunks_r else None,
+                )
+                ds_r.attrs["encoding-type"] = "array"
+                ds_r.attrs["encoding-version"] = "0.2.0"
+                if use_chunks_r:
+                    if isinstance(X_src, BackedArray):
+                        for start, end, chunk in X_src.chunked(1000):
+                            if issparse(chunk):
+                                chunk = chunk.toarray()
+                            ds_r[start:end] = np.asarray(chunk, dtype=np.float32)
+                    else:
+                        arr = np.asarray(X_src[:] if hasattr(X_src, "__getitem__") else X_src)
+                        if issparse(arr):
+                            arr = arr.toarray()
+                        ds_r[:] = arr.astype(np.float32)
+        except Exception as e:
+            logger.warning("[anndataoom] Failed to persist .raw: %r", e)
+
     def write_h5ad(self, path: str | Path, **kwargs):
         """Alias for write."""
         self.write(path, **kwargs)
@@ -1049,6 +1194,11 @@ class AnnDataOOM:
         if self._snap is not None:
             try:
                 self._snap.close()
+            except Exception:
+                pass
+        if self._raw is not None and hasattr(self._raw, "close"):
+            try:
+                self._raw.close()
             except Exception:
                 pass
         # Clear repr cache (density etc. invalid after close)
@@ -1248,6 +1398,9 @@ class _FrozenRaw:
         self._X = X
         self._var = var.copy()
         self._varm = varm or {}
+        # h5py.File handle that backs ``X`` when loaded from /raw.
+        # Held to keep the file alive for the lifetime of this _FrozenRaw.
+        self._h5_file = None
 
     @classmethod
     def from_oom(cls, oom: AnnDataOOM) -> _FrozenRaw:
@@ -1330,10 +1483,154 @@ class _FrozenRaw:
             adata.varm[k] = np.asarray(v)
         return adata
 
+    def _subset_obs(self, obs_idx: np.ndarray | None) -> "_FrozenRaw":
+        """Return a row-subset _FrozenRaw (keeps all genes).
+
+        Called when the parent AnnDataOOM subsets obs — raw must follow
+        along so ``adata.raw.X`` stays row-aligned with ``adata.obs``.
+        Var is preserved so HVG-based subsetting still sees all genes
+        through ``.raw``.
+        """
+        if obs_idx is None:
+            return self
+        n_obs_new = len(obs_idx)
+        if isinstance(self._X, BackedArray):
+            X_sub = _SubsetBackedArray(
+                self._X, np.asarray(obs_idx), None, (n_obs_new, self._X.shape[1])
+            )
+        else:
+            X_sub = self._X[obs_idx]
+        new = _FrozenRaw(X_sub, self._var, dict(self._varm))
+        new._h5_file = self._h5_file  # share underlying handle
+        return new
+
+    def close(self) -> None:
+        """Close the underlying h5py file (if any). Idempotent."""
+        f = self._h5_file
+        self._h5_file = None
+        if f is not None:
+            try:
+                f.close()
+            except Exception:
+                pass
+
 
 # ======================================================================
 # Helpers
 # ======================================================================
+
+
+def _load_raw_from_h5ad(path, n_obs: int) -> _FrozenRaw | None:
+    """Lazily load ``/raw`` from an h5ad file into a :class:`_FrozenRaw`.
+
+    The Rust backend (anndata_rs) does not expose ``.raw``. h5ad files
+    written by anndata/scanpy commonly carry a ``/raw`` group with the
+    pre-HVG/pre-normalisation counts plus ``var`` / ``varm``. We open
+    the file read-only with h5py, wrap ``raw/X`` as a lazy
+    :class:`BackedArray` over ``anndata.io.sparse_dataset`` (CSR/CSC) or
+    the raw dataset (dense), and eagerly read the small ``var``/``varm``
+    via :func:`anndata.io.read_elem`.
+
+    Returns ``None`` when the file has no ``/raw`` group, or anything
+    goes wrong (best-effort — we never want missing raw to break a
+    plain read).
+    """
+    if path is None:
+        return None
+    try:
+        from pathlib import Path as _P
+        if not _P(str(path)).exists():
+            return None
+    except Exception:
+        return None
+
+    try:
+        import h5py
+        import anndata.io as aio
+    except Exception:
+        return None
+
+    try:
+        f = h5py.File(str(path), "r")
+    except Exception:
+        return None
+
+    try:
+        if "raw" not in f:
+            f.close()
+            return None
+        raw_grp = f["raw"]
+
+        # var (eager — metadata is small)
+        try:
+            var = aio.read_elem(raw_grp["var"]) if "var" in raw_grp else pd.DataFrame()
+        except Exception:
+            var = pd.DataFrame()
+        if not isinstance(var, pd.DataFrame):
+            var = pd.DataFrame(var)
+
+        # varm — small, eager. Try whole-group first; fall back to per-key.
+        varm: dict = {}
+        if "varm" in raw_grp:
+            try:
+                vm = aio.read_elem(raw_grp["varm"])
+                varm = dict(vm) if vm is not None else {}
+            except Exception:
+                try:
+                    for k in raw_grp["varm"].keys():
+                        try:
+                            varm[k] = aio.read_elem(raw_grp["varm"][k])
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+        # X — lazy. SparseDataset for csr/csc, raw h5py dataset for dense.
+        if "X" not in raw_grp:
+            f.close()
+            return None
+        x_elem = raw_grp["X"]
+        enc = x_elem.attrs.get("encoding-type", "")
+        if isinstance(enc, bytes):
+            enc = enc.decode("utf-8", errors="ignore")
+        try:
+            if enc in ("csr_matrix", "csc_matrix"):
+                x_backed = aio.sparse_dataset(x_elem)
+            else:
+                x_backed = x_elem
+        except Exception:
+            f.close()
+            return None
+
+        try:
+            x_shape = tuple(x_backed.shape)
+        except Exception:
+            f.close()
+            return None
+
+        if x_shape[0] != n_obs:
+            # Misaligned raw — bail out so callers don't get a silently
+            # wrong row-count. Common when raw was already obs-subset
+            # before write; we can't reconstruct the mapping safely.
+            logger.warning(
+                "[anndataoom] /raw row count (%d) does not match n_obs (%d); "
+                "skipping raw load for %s",
+                x_shape[0], n_obs, path,
+            )
+            f.close()
+            return None
+
+        backed_X = BackedArray(x_backed, shape=x_shape)
+        raw = _FrozenRaw(backed_X, var, varm)
+        raw._h5_file = f
+        return raw
+    except Exception as e:
+        try:
+            f.close()
+        except Exception:
+            pass
+        logger.debug("_load_raw_from_h5ad failed for %s: %r", path, e)
+        return None
 
 
 def _make_index_unique(index: pd.Index, join: str = "-") -> pd.Index:
