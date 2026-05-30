@@ -123,6 +123,26 @@ class TransformedBackedArray(BackedArray):
             return result
         return raw
 
+    def chunked(self, chunk_size: int = DEFAULT_CHUNK_SIZE):
+        """Iterate chunks of rows with transforms applied lazily.
+
+        Delegates row iteration to the **parent** array's ``chunked()``
+        so we get its native (rust-backed) O(n) iterator, then applies
+        ``_transform_chunk`` per chunk. Inheriting ``BackedArray.chunked``
+        would instead call ``self._read_rows(start, end)`` for every
+        chunk — and although the underlying parent ``_read_rows`` is
+        now O(end-start), routing every chunk through Python-level
+        slice reads still costs ~10× more than the native iterator.
+
+        Critical for `chunked_mean_var` / `chunked_pca` / any other
+        consumer that walks the full matrix after ``normalize`` +
+        ``log1p`` / ``scale``: those callers see the wrapped X, and
+        without this override they pay the per-chunk Python-slice tax
+        on every pass.
+        """
+        for start, end, raw_chunk in self._parent.chunked(chunk_size):
+            yield start, end, self._transform_chunk(raw_chunk, start)
+
     @property
     def dtype(self) -> np.dtype:
         return np.dtype(np.float32)
