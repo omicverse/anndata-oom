@@ -82,35 +82,46 @@ class BackedArray:
     # ------------------------------------------------------------------
 
     def _read_rows(self, start: int, end: int) -> np.ndarray | spmatrix:
-        """Read rows [start, end) from the backing store."""
+        """Read rows [start, end) from the backing store.
+
+        The Rust ``PyArrayElem`` *does* support slice reads via
+        ``elem[start:end]`` — that path is O(end - start), independent
+        of where the slice lives. Use it first; fall back to a
+        ``chunked()`` full-scan only if slicing raises (e.g. on an
+        older anndata-rs build without slice support).
+        """
         end = min(end, self._shape[0])
         if start >= end:
             return np.empty((0, self._shape[1]))
 
         if self._is_rs:
-            # anndata_rs PyArrayElem: no __getitem__, only chunked() iterator.
-            # chunked() always starts from row 0, so we scan and collect
-            # the rows that fall into [start, end).
-            rows = []
-            needed = end - start
-            cs_size = max(min(needed, 5000), DEFAULT_CHUNK_SIZE)
-            for data, cs, ce in self._elem.chunked(cs_size):
-                if ce <= start:
-                    continue
-                if cs >= end:
-                    break
-                local_start = max(start - cs, 0)
-                local_end = min(end - cs, data.shape[0])
-                rows.append(data[local_start:local_end])
-                if sum(r.shape[0] for r in rows) >= needed:
-                    break
-            if not rows:
-                return np.empty((0, self._shape[1]))
-            if len(rows) == 1:
-                return rows[0]
-            if issparse(rows[0]):
-                return sp_vstack(rows).tocsr()
-            return np.vstack(rows)
+            try:
+                return self._elem[int(start):int(end)]
+            except Exception:
+                # Legacy fallback: scan via chunked() until we cover
+                # the requested range. This is O(end) per call and was
+                # the only available path before slice support landed
+                # — keeping it so the same code runs on older binaries.
+                rows = []
+                needed = end - start
+                cs_size = max(min(needed, 5000), DEFAULT_CHUNK_SIZE)
+                for data, cs, ce in self._elem.chunked(cs_size):
+                    if ce <= start:
+                        continue
+                    if cs >= end:
+                        break
+                    local_start = max(start - cs, 0)
+                    local_end = min(end - cs, data.shape[0])
+                    rows.append(data[local_start:local_end])
+                    if sum(r.shape[0] for r in rows) >= needed:
+                        break
+                if not rows:
+                    return np.empty((0, self._shape[1]))
+                if len(rows) == 1:
+                    return rows[0]
+                if issparse(rows[0]):
+                    return sp_vstack(rows).tocsr()
+                return np.vstack(rows)
 
         # Standard array-like: use __getitem__
         try:

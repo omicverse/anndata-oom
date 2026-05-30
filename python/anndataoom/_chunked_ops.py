@@ -123,6 +123,26 @@ class TransformedBackedArray(BackedArray):
             return result
         return raw
 
+    def chunked(self, chunk_size: int = DEFAULT_CHUNK_SIZE):
+        """Iterate chunks of rows with transforms applied lazily.
+
+        Delegates row iteration to the **parent** array's ``chunked()``
+        so we get its native (rust-backed) O(n) iterator, then applies
+        ``_transform_chunk`` per chunk. Inheriting ``BackedArray.chunked``
+        would instead call ``self._read_rows(start, end)`` for every
+        chunk — and although the underlying parent ``_read_rows`` is
+        now O(end-start), routing every chunk through Python-level
+        slice reads still costs ~10× more than the native iterator.
+
+        Critical for `chunked_mean_var` / `chunked_pca` / any other
+        consumer that walks the full matrix after ``normalize`` +
+        ``log1p`` / ``scale``: those callers see the wrapped X, and
+        without this override they pay the per-chunk Python-slice tax
+        on every pass.
+        """
+        for start, end, raw_chunk in self._parent.chunked(chunk_size):
+            yield start, end, self._transform_chunk(raw_chunk, start)
+
     @property
     def dtype(self) -> np.dtype:
         return np.dtype(np.float32)
@@ -263,6 +283,12 @@ def chunked_normalize_total(
 
     # --- Build normalization factors ---
     norm_factors = counts_per_cell / target_sum
+    # Guard zero-count cells (and any propagated NaN from upstream sparse
+    # backends) so the downstream `data /= factors` step never produces NaN
+    # or Inf — those would silently propagate through log1p / scale and
+    # corrupt every plot / PCA / cluster call downstream.
+    norm_factors = np.nan_to_num(norm_factors, nan=1.0, posinf=1.0, neginf=1.0)
+    norm_factors[norm_factors == 0] = 1.0
     # Store for reference
     adata.obs["_norm_factor"] = norm_factors
 
@@ -320,19 +346,37 @@ def chunked_mean_var(
     count = 0
 
     for start, end, chunk in X.chunked(chunk_size):
-        if issparse(chunk):
-            chunk = chunk.toarray()
-        chunk = chunk.astype(np.float64)
         batch_size = chunk.shape[0]
 
-        # Batch Welford update
-        batch_mean = chunk.mean(axis=0)
-        batch_var = chunk.var(axis=0) * batch_size  # sum of squared deviations
+        # Per-batch column mean and sum-of-squared-deviations. For sparse
+        # chunks we use the E[X²] - E[X]² formula computed directly via
+        # `chunk.multiply(chunk).sum(axis=0)` — this skips the full
+        # densification that an `astype(float64)` + `chunk.var(axis=0)`
+        # path triggers on every chunk (memory and time blow-up at
+        # atlas scale; matters most for the post-normalize+log1p path
+        # used by `chunked_scale`). The numerical drop versus per-batch
+        # Welford is negligible for log1p-normalised data and the
+        # *cross-batch* merge below stays in Welford form.
+        if issparse(chunk):
+            batch_sum = np.asarray(chunk.sum(axis=0), dtype=np.float64).ravel()
+            batch_sq_sum = np.asarray(
+                chunk.multiply(chunk).sum(axis=0), dtype=np.float64
+            ).ravel()
+            batch_mean = batch_sum / batch_size
+            # sum of squared deviations from the batch mean
+            batch_ssd = batch_sq_sum - batch_size * batch_mean * batch_mean
+            # Floating-point can drive this slightly negative; clamp.
+            np.clip(batch_ssd, 0.0, None, out=batch_ssd)
+        else:
+            chunk = chunk.astype(np.float64, copy=False)
+            batch_mean = chunk.mean(axis=0)
+            batch_ssd = chunk.var(axis=0) * batch_size
 
+        # Welford merge across batches
         new_count = count + batch_size
         delta = batch_mean - mean
         mean = mean + delta * (batch_size / new_count)
-        M2 = M2 + batch_var + (delta ** 2) * (count * batch_size / new_count)
+        M2 = M2 + batch_ssd + (delta ** 2) * (count * batch_size / new_count)
         count = new_count
 
     var = M2 / max(count - 1, 1)  # sample variance
@@ -426,7 +470,20 @@ def chunked_scale(
     std[std == 0] = 1.0
 
     # Build lazy scaled array
-    if isinstance(X, TransformedBackedArray):
+    if isinstance(X, ScaledBackedArray):
+        # ScaledBackedArray inherits from TransformedBackedArray, so the
+        # `isinstance(X, TransformedBackedArray)` branch below would silently
+        # match and unwrap to X._parent — dropping the prior scale's mean/std
+        # entirely. The recomputed mean/std on the already-scaled input is
+        # ≈0 / ≈1, so the user's "second scale" becomes a no-op while the
+        # caller believes they are re-scaling. Refuse instead.
+        raise RuntimeError(
+            "ov.pp.scale: adata.X is already a ScaledBackedArray. "
+            "Re-scaling silently loses the prior mean/std; reset X to the "
+            "unscaled layer (e.g. via `adata.X = adata.layers['counts']` "
+            "after normalize+log1p) before calling scale again."
+        )
+    elif isinstance(X, TransformedBackedArray):
         scaled = ScaledBackedArray(
             X._parent, mean, std, max_value,
             norm_factors=X._norm_factors,
