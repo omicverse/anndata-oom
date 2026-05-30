@@ -528,26 +528,29 @@ def chunked_scale(
 
 
 def _maybe_materialize_scaled(
-    scaled, threshold_gb: float, chunk_size: int
+    scaled, threshold_gb: float, chunk_size: int,
+    hvg_idx: np.ndarray | None = None,
 ) -> np.ndarray | None:
     """Return the dense scaled matrix when it fits, else None.
 
-    Skips the materialise when the projected float32 size would exceed
-    `threshold_gb`. Reading goes through whatever the wrapped array
-    yields — for a `ScaledBackedArray` this is already dense post-scale
-    (with clip applied per the wrap's `max_value`), so the resulting
-    in-memory ndarray is numerically identical to the chunked path's
-    per-chunk reads concatenated.
+    When `hvg_idx` is given, only those columns are materialised. This
+    is the case that lets `use_highly_variable=True` collapse a
+    232 k × 58 k matrix that would NOT fit the 16 GB threshold into a
+    232 k × 2 k matrix that comfortably does.
     """
-    n_obs, n_vars = scaled.shape
-    projected = n_obs * n_vars * 4 / 1024 ** 3  # float32 bytes → GB
+    n_obs, n_vars_full = scaled.shape
+    n_vars_eff = len(hvg_idx) if hvg_idx is not None else n_vars_full
+    projected = n_obs * n_vars_eff * 4 / 1024 ** 3  # float32 bytes → GB
     if projected > threshold_gb:
         return None
-    dense = np.empty((n_obs, n_vars), dtype=np.float32)
+    dense = np.empty((n_obs, n_vars_eff), dtype=np.float32)
     for start, end, chunk in scaled.chunked(chunk_size):
         if issparse(chunk):
             chunk = chunk.toarray()
-        dense[start:end] = np.asarray(chunk, dtype=np.float32)
+        chunk = np.asarray(chunk, dtype=np.float32)
+        if hvg_idx is not None:
+            chunk = chunk[:, hvg_idx]
+        dense[start:end] = chunk
     return dense
 
 
@@ -555,6 +558,7 @@ def _implicit_centered_pca(
     scaled,
     *, n_comps: int, n_oversamples: int, n_power_iters: int,
     chunk_size: int, random_state: int,
+    hvg_idx: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Randomised SVD of a `ScaledBackedArray` without ever densifying.
 
@@ -571,11 +575,20 @@ def _implicit_centered_pca(
     benchmark dataset we tested. Regression test in
     `tests/test_pca_accuracy.py`.
     """
-    n_obs, n_vars = scaled.shape
-    mean = scaled._scale_mean.astype(np.float64)          # (n_vars,)
-    std = scaled._scale_std.astype(np.float64)            # (n_vars,)
-    inv_std = 1.0 / std                                   # (n_vars,)
-    mean_over_std = mean * inv_std                        # (n_vars,)
+    n_obs, n_vars_full = scaled.shape
+    # If HVG selection is on, restrict mean/std AND every chunk slice
+    # to the HVG columns. The algebraic identity is unchanged — it
+    # operates on whichever subset of columns we keep.
+    if hvg_idx is not None:
+        mean = scaled._scale_mean[hvg_idx].astype(np.float64)
+        std  = scaled._scale_std[hvg_idx].astype(np.float64)
+        n_vars = len(hvg_idx)
+    else:
+        mean = scaled._scale_mean.astype(np.float64)
+        std  = scaled._scale_std.astype(np.float64)
+        n_vars = n_vars_full
+    inv_std = 1.0 / std
+    mean_over_std = mean * inv_std
 
     # The sparse normalize+log1p view: same wrap state as `scaled` but
     # without the z-score on top. Reusing `TransformedBackedArray`
@@ -585,6 +598,16 @@ def _implicit_centered_pca(
         norm_factors=scaled._norm_factors,
         apply_log1p=scaled._apply_log1p,
     )
+
+    def _slice_chunk_cols(chunk):
+        """Column-restrict a chunk to HVG. CSR fancy column indexing is
+        O(nnz) per chunk; acceptable since it happens once per chunked
+        pass, not per matvec call."""
+        if hvg_idx is None:
+            return chunk
+        if issparse(chunk):
+            return chunk[:, hvg_idx]
+        return np.asarray(chunk)[:, hvg_idx]
 
     k = min(n_comps + n_oversamples, n_obs, n_vars)
     rng = np.random.RandomState(random_state)
@@ -597,10 +620,11 @@ def _implicit_centered_pca(
         shift = mean_over_std @ W64                # (k,)
         Y = np.empty((n_obs, k), dtype=np.float64)
         for start, end, chunk in log_norm_view.chunked(chunk_size):
-            if issparse(chunk):
-                Y[start:end] = chunk @ W_div_sigma
+            c = _slice_chunk_cols(chunk)
+            if issparse(c):
+                Y[start:end] = c @ W_div_sigma
             else:
-                Y[start:end] = np.asarray(chunk, dtype=np.float64) @ W_div_sigma
+                Y[start:end] = np.asarray(c, dtype=np.float64) @ W_div_sigma
         Y -= shift[None, :]
         return Y
 
@@ -615,12 +639,12 @@ def _implicit_centered_pca(
         Y_sum = Y.sum(axis=0)                       # (k,)
         Z = np.zeros((n_vars, k), dtype=np.float64)
         for start, end, chunk in log_norm_view.chunked(chunk_size):
+            c = _slice_chunk_cols(chunk)
             Y_chunk = Y[start:end].astype(np.float64, copy=False)
-            if issparse(chunk):
-                # sparse.T @ dense returns dense (n_vars, k)
-                Z += np.asarray(chunk.T @ Y_chunk)
+            if issparse(c):
+                Z += np.asarray(c.T @ Y_chunk)
             else:
-                Z += np.asarray(chunk, dtype=np.float64).T @ Y_chunk
+                Z += np.asarray(c, dtype=np.float64).T @ Y_chunk
         # Now subtract the mean contribution and apply inv_std.
         Z -= np.outer(mean, Y_sum)
         Z *= inv_std[:, None]
@@ -652,6 +676,26 @@ def _implicit_centered_pca(
     return X_pca, components, variance_ratio
 
 
+def _resolve_hvg_mask(adata, use_highly_variable):
+    """Return (hvg_idx, n_hvg) or (None, n_vars) if HVG subsetting is off.
+
+    Matches scanpy convention: read `adata.var['highly_variable']` or its
+    omicverse alias `adata.var['highly_variable_features']`. Returns None
+    when the flag is absent, when use_highly_variable=False, or when the
+    flag selects either 0 or every gene (subsetting would be a no-op).
+    """
+    if not use_highly_variable:
+        return None
+    for key in ("highly_variable_features", "highly_variable"):
+        if key in adata.var.columns:
+            mask = np.asarray(adata.var[key].values).astype(bool)
+            n_hvg = int(mask.sum())
+            if 0 < n_hvg < adata.n_vars:
+                return np.where(mask)[0]
+            break
+    return None
+
+
 def chunked_pca(
     adata: AnnDataOOM,
     *,
@@ -663,6 +707,7 @@ def chunked_pca(
     random_state: int = 0,
     materialize_threshold_gb: float = 16.0,
     use_implicit_centering: bool = True,
+    use_highly_variable: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """PCA via randomised SVD with three execution paths.
 
@@ -710,11 +755,20 @@ def chunked_pca(
     use_implicit_centering : bool
         Enable path (2). Default True. Set to False to force the
         legacy path for debugging.
+    use_highly_variable : bool
+        Subset to HVG-flagged columns before PCA (default True). Reads
+        ``adata.var['highly_variable_features']`` (omicverse) or
+        ``adata.var['highly_variable']`` (scanpy); no-op if neither is
+        present or if the flag selects every gene. Matches scanpy's
+        ``sc.tl.pca(..., use_highly_variable=True)``. For a 232 k × 58 k
+        Tabula Sapiens matrix this drops the effective ``n_vars`` to the
+        ~2 000 HVGs, cutting all three paths by 30× — and lets Path 1's
+        16 GB threshold trigger where it otherwise wouldn't.
 
     Returns
     -------
     X_pca : ndarray, shape (n_obs, n_comps)
-    components : ndarray, shape (n_comps, n_vars)
+    components : ndarray, shape (n_comps, effective n_vars)
     variance_ratio : ndarray, shape (n_comps,)
     """
     if layer in adata.layers:
@@ -723,10 +777,15 @@ def chunked_pca(
         X = adata.X
 
     n_obs, n_vars = X.shape
+    hvg_idx = _resolve_hvg_mask(adata, use_highly_variable)
+    if hvg_idx is not None:
+        n_vars = len(hvg_idx)  # effective for thresholds, allocations
 
     # ---- Path 1: auto-materialise + sklearn randomized_svd ----------
     if isinstance(X, ScaledBackedArray):
-        dense = _maybe_materialize_scaled(X, materialize_threshold_gb, chunk_size)
+        dense = _maybe_materialize_scaled(
+            X, materialize_threshold_gb, chunk_size, hvg_idx=hvg_idx,
+        )
         if dense is not None:
             try:
                 from sklearn.utils.extmath import randomized_svd
