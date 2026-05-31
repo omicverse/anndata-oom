@@ -266,18 +266,21 @@ What changes (measured on the Tabula Sapiens benchmark, H100):
 
 ### omicverse function compatibility
 
-Compatibility of `ov.pp.*` against an `AnnDataOOM` backend (probed in both
-`cpu` and `cpu-gpu-mixed`; `ᴳ` = offloads to GPU in mixed mode):
+Compatibility of `ov.pp.*` against an `AnnDataOOM` backend — **14 of 24
+probed functions** run on the OOM path (probed in both `cpu` and
+`cpu-gpu-mixed`; `ᴳ` = offloads to GPU in mixed mode):
 
-| function | OOM-compatible | notes |
+| function | OOM | notes |
 |---|:---:|---|
 | `qc`, `preprocess`, `normalize_total`, `log1p`, `identify_robust_genes` | ✅ | core pipeline |
 | `scale`, `pca` | ✅ | lazy / chunked, CPU |
 | `neighbors`ᴳ, `umap`ᴳ, `leiden`, `louvain` | ✅ | operate on `X_pca` only |
-| `highly_variable_genes` (standalone) | ❌ | use the fused HVG inside `preprocess` |
+| `tsne`, `mde`ᴳ, `sude` | ✅ | embeddings on `X_pca` (`sude` errors in mixed) |
+| `highly_variable_genes`, `highly_variable_features` (standalone) | ❌ | use the fused HVG inside `preprocess` |
 | `normalize_pearson_residuals` | ❌ | not yet OOM-adapted |
+| `regress` | ❌ | forwards to scanpy `regress_out` (densifies) |
 | `filter_cells`, `filter_genes` | ❌ | not yet OOM-adapted |
-| `score_genes_cell_cycle` | ❌ | backed `var` lookup unsupported |
+| `scrublet`, `score_genes_cell_cycle` | ❌ | backed `var` lookup |
 | `anndata_to_GPU` / `anndata_to_CPU` | ➖ | require optional `rapids_singlecell` |
 
 Failures raise a clear exception at the call site — they never silently

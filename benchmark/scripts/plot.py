@@ -537,9 +537,14 @@ def table_compat():
              "\\texttt{ov.pp} function & cpu & mixed & GPU-offload & "
              "note \\\\", "\\midrule"]
     notes = {
+        "mde": "torch (GPU-capable)",
+        "sude": "fails in mixed (NaN)",
         "highly_variable_genes": "standalone; use \\texttt{preprocess}",
+        "highly_variable_features": "pegasus HVF densifies",
         "normalize_pearson_residuals": "not OOM-adapted",
-        "score_genes_cell_cycle": "h5 var lookup",
+        "regress": "scanpy regress\\_out densifies",
+        "scrublet": "backed var lookup",
+        "score_genes_cell_cycle": "backed var lookup",
         "filter_cells": "not OOM-adapted",
         "filter_genes": "not OOM-adapted",
         "anndata_to_GPU": "needs rapids",
@@ -581,19 +586,35 @@ def write_numbers_mixed():
             break
 
     # In-memory dense path: GPU torch_pca speedup (the contrast to OOM).
+    # Anchor the headline on TS-5k — the PCA stage is the largest fraction
+    # of a small-data pipeline (the interactive case), so the GPU PCA win
+    # is both most dramatic and most reproducible there. The whole-pipeline
+    # gain shrinks at scale as the CPU dense-scale/load stage dominates;
+    # we capture that diminishing-returns endpoint separately.
+    ds_meta = {k: (n, lab) for k, n, *_, lab, _ in DATASETS}
+    r5c, r5m = _load_one("ov-anndata", "ts_5k"), _load_one("ov-anndata-mixed", "ts_5k")
+    if r5c and r5m:
+        pc = r5c["stages"].get("pca", {}).get("seconds")
+        pm = r5m["stages"].get("pca", {}).get("seconds")
+        cmd("mixedAnnLabel", "TS-5k")
+        cmd("mixedAnnCells", "5,000")
+        if pc and pm:
+            cmd("mixedAnnPcaCpuSec", f"{pc:.1f}")
+            cmd("mixedAnnPcaMixSec", f"{pm:.1f}")
+            cmd("mixedAnnPcaSpeedup", f"{pc/pm:.0f}")
+        cmd("mixedAnnTotalSpeedup", f"{total_time(r5c)/total_time(r5m):.2f}")
+        cmd("mixedAnnPcaGpuMB", f"{peak_gpu(r5m):.0f}")
+    # Largest in-memory pair: shows the diminishing whole-pipeline return.
     for key, n, *_, label, _ in reversed(DATASETS):
         rc, rm = _load_one("ov-anndata", key), _load_one("ov-anndata-mixed", key)
         if rc and rm:
             pc = rc["stages"].get("pca", {}).get("seconds")
             pm = rm["stages"].get("pca", {}).get("seconds")
-            cmd("mixedAnnLabel", label)
-            cmd("mixedAnnCells", f"{n:,}")
+            cmd("mixedAnnBigLabel", label)
+            cmd("mixedAnnBigCells", f"{n:,}")
             if pc and pm:
-                cmd("mixedAnnPcaCpuSec", f"{pc:.1f}")
-                cmd("mixedAnnPcaMixSec", f"{pm:.1f}")
-                cmd("mixedAnnPcaSpeedup", f"{pc/pm:.0f}")
-            cmd("mixedAnnTotalSpeedup", f"{total_time(rc)/total_time(rm):.2f}")
-            cmd("mixedAnnPcaGpuMB", f"{peak_gpu(rm):.0f}")
+                cmd("mixedAnnBigPcaSpeedup", f"{pc/pm:.1f}")
+            cmd("mixedAnnBigTotalSpeedup", f"{total_time(rc)/total_time(rm):.2f}")
             break
 
     # Compat counts. (We deliberately do NOT emit a neighbors wall-clock

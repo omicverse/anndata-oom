@@ -1,0 +1,30 @@
+\begin{tabular}{lcccr}
+\toprule
+\texttt{ov.pp} function & cpu & mixed & GPU-offload & note \\
+\midrule
+\texttt{qc} & \cmark & \cmark & -- &  \\
+\texttt{preprocess} & \cmark & \cmark & -- &  \\
+\texttt{scale} & \cmark & \cmark & -- &  \\
+\texttt{pca} & \cmark & \cmark & -- &  \\
+\texttt{neighbors} & \cmark & \cmark\,\textsuperscript{G} & yes &  \\
+\texttt{leiden} & \cmark & \cmark & -- &  \\
+\texttt{louvain} & \cmark & \cmark & -- &  \\
+\texttt{umap} & \cmark & \cmark\,\textsuperscript{G} & yes &  \\
+\texttt{tsne} & \cmark & \cmark & -- &  \\
+\texttt{mde} & \cmark\,\textsuperscript{G} & \cmark\,\textsuperscript{G} & yes & torch (GPU-capable) \\
+\texttt{sude} & \cmark & \xmark & -- & fails in mixed (NaN) \\
+\texttt{normalize\_total} & \cmark & \cmark & -- &  \\
+\texttt{log1p} & \cmark & \cmark & -- &  \\
+\texttt{identify\_robust\_genes} & \cmark & \cmark & -- &  \\
+\texttt{highly\_variable\_features} & \xmark & \xmark & -- & pegasus HVF densifies \\
+\texttt{highly\_variable\_genes} & \xmark & \xmark & -- & standalone; use \texttt{preprocess} \\
+\texttt{normalize\_pearson\_residuals} & \xmark & \xmark & -- & not OOM-adapted \\
+\texttt{regress} & \xmark & \xmark & -- & scanpy regress\_out densifies \\
+\texttt{scrublet} & \xmark & \xmark & -- & backed var lookup \\
+\texttt{score\_genes\_cell\_cycle} & \xmark & \xmark & -- & backed var lookup \\
+\texttt{filter\_cells} & \xmark & \xmark & -- & not OOM-adapted \\
+\texttt{filter\_genes} & \xmark & \xmark & -- & not OOM-adapted \\
+\texttt{anndata\_to\_GPU} & \xmark & \xmark & -- & needs rapids \\
+\texttt{anndata\_to\_CPU} & \xmark & \xmark & -- & needs rapids \\
+\bottomrule
+\end{tabular}

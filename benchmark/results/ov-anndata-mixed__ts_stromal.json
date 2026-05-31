@@ -1,0 +1,46 @@
+{
+  "config": "ov-anndata-mixed",
+  "mode": "cpu-gpu-mixed",
+  "device": "NVIDIA H100 80GB HBM3",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_stromal.h5ad",
+  "input_mb": 9594.1,
+  "total_seconds": 847.9278,
+  "stages": {
+    "load": {
+      "seconds": 205.1656,
+      "rss_mb_before": 476.2,
+      "rss_mb_after": 37833.4,
+      "rss_mb_delta": 37357.2,
+      "gpu_peak_mb": 0.0
+    },
+    "qc": {
+      "seconds": 190.1806,
+      "rss_mb_before": 28821.2,
+      "rss_mb_after": 28839.2,
+      "rss_mb_delta": 17.9,
+      "gpu_peak_mb": 0.0
+    },
+    "preprocess": {
+      "seconds": 297.733,
+      "rss_mb_before": 28839.2,
+      "rss_mb_after": 34768.5,
+      "rss_mb_delta": 5929.3,
+      "gpu_peak_mb": 0.0
+    },
+    "scale": {
+      "seconds": 114.4242,
+      "rss_mb_before": 34768.5,
+      "rss_mb_after": 98911.8,
+      "rss_mb_delta": 64143.3,
+      "gpu_peak_mb": 0.0
+    },
+    "pca": {
+      "seconds": 16.3875,
+      "rss_mb_before": 98911.8,
+      "rss_mb_after": 99161.5,
+      "rss_mb_delta": 249.7,
+      "gpu_peak_mb": 3798.6
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

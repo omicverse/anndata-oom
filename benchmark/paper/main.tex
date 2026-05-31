@@ -617,7 +617,11 @@ mode-invariant. There \texttt{ov.pp.pca} dispatches to the GPU
 \texttt{torch\_pca} solver on the densified HVG matrix: at \mixedAnnLabel\
 (\mixedAnnCells\ cells) the PCA stage drops from \mixedAnnPcaCpuSec\,s to
 \mixedAnnPcaMixSec\,s ($\mixedAnnPcaSpeedup\times$, \mixedAnnPcaGpuMB~MB
-GPU), pulling the whole pipeline $\mixedAnnTotalSpeedup\times$ faster.
+GPU), pulling the whole pipeline $\mixedAnnTotalSpeedup\times$ faster. The
+PCA-stage speedup persists at scale ($\mixedAnnBigPcaSpeedup\times$ at
+\mixedAnnBigLabel, \mixedAnnBigCells\ cells), but the whole-pipeline gain
+there shrinks to $\mixedAnnBigTotalSpeedup\times$ because the CPU dense
+\texttt{scale} and load stages come to dominate the in-memory pipeline.
 \texttt{anndataoom} forgoes this PCA acceleration by routing through its
 CPU \texttt{chunked\_pca} --- a deliberate trade: its objective is bounded
 RSS, not raw speed, and the chunked path is what keeps peak memory flat at
@@ -653,18 +657,24 @@ backend in both \texttt{cpu} and \texttt{cpu-gpu-mixed} modes
 \compatNOk\ run to completion on the OOM backend, covering the entire
 canonical workflow (\texttt{qc}, \texttt{preprocess},
 \texttt{normalize\_total}, \texttt{log1p}, \texttt{identify\_robust\_genes},
-\texttt{scale}, \texttt{pca}, \texttt{neighbors}, \texttt{leiden},
-\texttt{louvain}, \texttt{umap}). The gaps are informative rather than
-fatal: \texttt{highly\_variable\_genes} fails \emph{only} when called
+\texttt{scale}, \texttt{pca}) plus the graph, clustering and embedding
+steps (\texttt{neighbors}, \texttt{leiden}, \texttt{louvain},
+\texttt{umap}, \texttt{tsne}, \texttt{mde}, \texttt{sude}). The gaps are
+informative rather than fatal: \texttt{highly\_variable\_genes} and
+\texttt{highly\_variable\_features} fail \emph{only} when called
 standalone (the fused HVG inside \texttt{ov.pp.preprocess} works, which
 is the canonical entry point); \texttt{filter\_cells} /
-\texttt{filter\_genes}, \texttt{normalize\_pearson\_residuals} and
-\texttt{score\_genes\_cell\_cycle} are not yet wired through the
-\texttt{is\_oom} dispatch and raise a clear error rather than silently
-mis-computing; and \texttt{anndata\_to\_GPU} / \texttt{anndata\_to\_CPU}
-require the optional \texttt{rapids\_singlecell} dependency (an
-environment matter, not an \texttt{anndataoom} limitation). None of the
-failures corrupt data --- they surface as exceptions at the call site.
+\texttt{filter\_genes}, \texttt{normalize\_pearson\_residuals},
+\texttt{regress} and \texttt{scrublet} are not yet wired through the
+\texttt{is\_oom} dispatch and either densify (\texttt{regress} forwards to
+scanpy's \texttt{regress\_out}) or hit a backed-\texttt{var} lookup, each
+raising a clear error rather than silently mis-computing;
+\texttt{score\_genes\_cell\_cycle} works in general but fails on the
+cellxgene gene-symbol \texttt{var} lookup of these specific files; and
+\texttt{anndata\_to\_GPU} / \texttt{anndata\_to\_CPU} require the optional
+\texttt{rapids\_singlecell} dependency (an environment matter, not an
+\texttt{anndataoom} limitation). None of the failures corrupt data ---
+they surface as exceptions at the call site.
 
 \begin{table}[t]
   \centering\footnotesize

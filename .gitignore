@@ -43,3 +43,6 @@ env/
 test_*.h5ad
 data/
 tutorials/data/
+
+# Benchmark PCA output arrays (large, regenerable by bench.py)
+benchmark/results/*.pca.npy

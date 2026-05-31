@@ -1,0 +1,437 @@
+{
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_5k.h5ad",
+  "tracks": [
+    {
+      "backend": "oom",
+      "mode": "cpu",
+      "results": [
+        {
+          "name": "qc",
+          "seconds": 4.895,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "preprocess",
+          "seconds": 8.858,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "highly_variable_features in var"
+        },
+        {
+          "name": "scale",
+          "seconds": 1.392,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "scaled layer present"
+        },
+        {
+          "name": "pca",
+          "seconds": 5.164,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "X_pca in obsm"
+        },
+        {
+          "name": "neighbors",
+          "seconds": 8.788,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "leiden",
+          "seconds": 0.159,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "louvain",
+          "seconds": 0.169,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "umap",
+          "seconds": 1.018,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "tsne",
+          "seconds": 43.825,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "mde",
+          "seconds": 7.699,
+          "gpu_mb": 63.1,
+          "status": "ok"
+        },
+        {
+          "name": "sude",
+          "seconds": 7.664,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "score_genes_cell_cycle",
+          "status": "fail",
+          "seconds": 6.265,
+          "gpu_mb": 0.0,
+          "error": "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)",
+          "tb": [
+            "  File \"h5py/_objects.pyx\", line 55, in h5py._objects.with_phil.wrapper",
+            "  File \"h5py/h5a.pyx\", line 102, in h5py.h5a.exists",
+            "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)"
+          ]
+        },
+        {
+          "name": "filter_cells",
+          "status": "fail",
+          "seconds": 0.873,
+          "gpu_mb": 0.0,
+          "error": "TypeError: '>' not supported between instances of 'BackedArray' and 'int'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_qc.py\", line 44, in _filter_cells_impl",
+            "    n_genes = (X > 0).sum(axis=1)",
+            "TypeError: '>' not supported between instances of 'BackedArray' and 'int'"
+          ]
+        },
+        {
+          "name": "filter_genes",
+          "status": "fail",
+          "seconds": 0.885,
+          "gpu_mb": 0.0,
+          "error": "TypeError: '>' not supported between instances of 'BackedArray' and 'int'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_qc.py\", line 79, in _filter_genes_impl",
+            "    n_cells = (X > 0).sum(axis=0)",
+            "TypeError: '>' not supported between instances of 'BackedArray' and 'int'"
+          ]
+        },
+        {
+          "name": "normalize_total",
+          "seconds": 1.599,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "log1p",
+          "seconds": 0.241,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_genes",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "AttributeError: 'BackedArray' object has no attribute 'copy'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_highly_variable_genes.py\", line 407, in _highly_variable_genes_single_batch",
+            "    x = x.copy()",
+            "AttributeError: 'BackedArray' object has no attribute 'copy'"
+          ]
+        },
+        {
+          "name": "identify_robust_genes",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_features",
+          "status": "fail",
+          "seconds": 0.0,
+          "gpu_mb": 0.0,
+          "error": "ValueError: not OOM-adapted (pegasus HVF densifies; fails after identify_robust_genes)",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/_registry.py\", line 1203, in wrapper",
+            "    return func(*args, **kwargs)",
+            "TypeError: highly_variable_features() got an unexpected keyword argument 'n_top_genes'"
+          ]
+        },
+        {
+          "name": "regress",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "not OOM-adapted: ov.pp.regress calls scanpy regress_out on adata.X (densifies); no is_oom branch",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/_registry.py\", line 1203, in wrapper",
+            "    return func(*args, **kwargs)",
+            "TypeError: regress() takes 1 positional argument but 2 were given"
+          ]
+        },
+        {
+          "name": "scrublet",
+          "status": "fail",
+          "seconds": 1.179,
+          "gpu_mb": 0.0,
+          "error": "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)",
+          "tb": [
+            "  File \"h5py/_objects.pyx\", line 55, in h5py._objects.with_phil.wrapper",
+            "  File \"h5py/h5a.pyx\", line 102, in h5py.h5a.exists",
+            "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)"
+          ]
+        },
+        {
+          "name": "normalize_pearson_residuals",
+          "status": "fail",
+          "seconds": 0.0,
+          "gpu_mb": 0.0,
+          "error": "NotImplementedError: ",
+          "tb": [
+            "  File \"/scratch/users/steorra/env/omicdev/lib/python3.10/site-packages/scanpy/_utils/__init__.py\", line 808, in check_nonnegative_integers",
+            "    raise NotImplementedError",
+            "NotImplementedError"
+          ]
+        },
+        {
+          "name": "anndata_to_GPU",
+          "status": "fail",
+          "seconds": 0.004,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 562, in anndata_to_GPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        },
+        {
+          "name": "anndata_to_CPU",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 609, in anndata_to_CPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "oom",
+      "mode": "cpu-gpu-mixed",
+      "results": [
+        {
+          "name": "qc",
+          "seconds": 4.748,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "preprocess",
+          "seconds": 8.942,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "highly_variable_features in var"
+        },
+        {
+          "name": "scale",
+          "seconds": 1.346,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "scaled layer present"
+        },
+        {
+          "name": "pca",
+          "seconds": 5.034,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "X_pca in obsm"
+        },
+        {
+          "name": "neighbors",
+          "seconds": 0.084,
+          "gpu_mb": 81.9,
+          "status": "ok"
+        },
+        {
+          "name": "leiden",
+          "seconds": 0.215,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "louvain",
+          "seconds": 0.213,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "umap",
+          "seconds": 3.346,
+          "gpu_mb": 537.9,
+          "status": "ok"
+        },
+        {
+          "name": "tsne",
+          "seconds": 43.133,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "mde",
+          "seconds": 2.463,
+          "gpu_mb": 31.0,
+          "status": "ok"
+        },
+        {
+          "name": "sude",
+          "status": "fail",
+          "seconds": 3.897,
+          "gpu_mb": 37.4,
+          "error": "ValueError: Input X contains NaN.\nNearestNeighbors does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and R",
+          "tb": [
+            "    raise ValueError(msg_err)",
+            "ValueError: Input X contains NaN.",
+            "NearestNeighbors does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values"
+          ]
+        },
+        {
+          "name": "score_genes_cell_cycle",
+          "status": "fail",
+          "seconds": 6.143,
+          "gpu_mb": 0.0,
+          "error": "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)",
+          "tb": [
+            "  File \"h5py/_objects.pyx\", line 55, in h5py._objects.with_phil.wrapper",
+            "  File \"h5py/h5a.pyx\", line 102, in h5py.h5a.exists",
+            "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)"
+          ]
+        },
+        {
+          "name": "filter_cells",
+          "status": "fail",
+          "seconds": 0.892,
+          "gpu_mb": 0.0,
+          "error": "TypeError: '>' not supported between instances of 'BackedArray' and 'int'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_qc.py\", line 44, in _filter_cells_impl",
+            "    n_genes = (X > 0).sum(axis=1)",
+            "TypeError: '>' not supported between instances of 'BackedArray' and 'int'"
+          ]
+        },
+        {
+          "name": "filter_genes",
+          "status": "fail",
+          "seconds": 0.878,
+          "gpu_mb": 0.0,
+          "error": "TypeError: '>' not supported between instances of 'BackedArray' and 'int'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_qc.py\", line 79, in _filter_genes_impl",
+            "    n_cells = (X > 0).sum(axis=0)",
+            "TypeError: '>' not supported between instances of 'BackedArray' and 'int'"
+          ]
+        },
+        {
+          "name": "normalize_total",
+          "seconds": 1.563,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "log1p",
+          "seconds": 0.238,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_genes",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "AttributeError: 'BackedArray' object has no attribute 'copy'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_highly_variable_genes.py\", line 407, in _highly_variable_genes_single_batch",
+            "    x = x.copy()",
+            "AttributeError: 'BackedArray' object has no attribute 'copy'"
+          ]
+        },
+        {
+          "name": "identify_robust_genes",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_features",
+          "status": "fail",
+          "seconds": 0.0,
+          "gpu_mb": 0.0,
+          "error": "ValueError: not OOM-adapted (pegasus HVF densifies; fails after identify_robust_genes)",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/_registry.py\", line 1203, in wrapper",
+            "    return func(*args, **kwargs)",
+            "TypeError: highly_variable_features() got an unexpected keyword argument 'n_top_genes'"
+          ]
+        },
+        {
+          "name": "regress",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "not OOM-adapted: ov.pp.regress calls scanpy regress_out on adata.X (densifies); no is_oom branch",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/_registry.py\", line 1203, in wrapper",
+            "    return func(*args, **kwargs)",
+            "TypeError: regress() takes 1 positional argument but 2 were given"
+          ]
+        },
+        {
+          "name": "scrublet",
+          "status": "fail",
+          "seconds": 1.182,
+          "gpu_mb": 0.0,
+          "error": "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)",
+          "tb": [
+            "  File \"h5py/_objects.pyx\", line 55, in h5py._objects.with_phil.wrapper",
+            "  File \"h5py/h5a.pyx\", line 102, in h5py.h5a.exists",
+            "RuntimeError: Can't synchronously determine if attribute exists by name (invalid identifier type to function)"
+          ]
+        },
+        {
+          "name": "normalize_pearson_residuals",
+          "status": "fail",
+          "seconds": 0.0,
+          "gpu_mb": 0.0,
+          "error": "NotImplementedError: ",
+          "tb": [
+            "  File \"/scratch/users/steorra/env/omicdev/lib/python3.10/site-packages/scanpy/_utils/__init__.py\", line 808, in check_nonnegative_integers",
+            "    raise NotImplementedError",
+            "NotImplementedError"
+          ]
+        },
+        {
+          "name": "anndata_to_GPU",
+          "status": "fail",
+          "seconds": 0.004,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 562, in anndata_to_GPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        },
+        {
+          "name": "anndata_to_CPU",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 609, in anndata_to_CPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        }
+      ]
+    }
+  ]
+}
