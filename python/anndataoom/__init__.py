@@ -41,6 +41,7 @@ from ._chunked_ops import (
     chunked_highly_variable_genes_pearson,
     materialise_for_pca,
 )
+from ._centered_sparse import CenteredSparseArray
 
 # The compiled Rust extension (bundled with the wheel)
 from . import _backend
@@ -86,6 +87,7 @@ __all__ = [
     "Compression",
     "TransformedBackedArray",
     "ScaledBackedArray",
+    "CenteredSparseArray",
     "concat",
     "is_oom",
     "oom_guard",
