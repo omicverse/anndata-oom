@@ -16,15 +16,21 @@ benchmark/
 │   ├── plot.py                  — JSON → figures + LaTeX tables + macros
 │   ├── concat_1M.py             — build ts_1M.h5ad from three TS tissues
 │   ├── run_full_bench.sh        — drive the full 4 × 7 matrix sequentially
+│   ├── run_mixed_bench.sh       — drive the cpu-gpu-mixed half of the matrix
+│   ├── compat_matrix.py         — omicverse-function × {cpu,mixed} compatibility
+│   │                              probe on an AnnDataOOM backend
 │   └── test_implicit_scale.py   — standalone validator for CenteredSparseArray
 │                                  (per-gene / per-cell / matmul vs textbook ref)
-├── results/                     — one JSON per (config, dataset) cell
-├── figures/                     — fig_totaltime.{pdf,png}, fig_stages.{pdf,png}
+├── results/                     — one JSON per (config, dataset) cell;
+│                                  compat_*.json for the compatibility matrix
+├── figures/                     — fig_totaltime, fig_stages, fig_mixed (.pdf/.png)
 └── paper/
     ├── main.tex / main.pdf
     ├── numbers.tex              — hand-curated macros (v0.1.6 PCA story)
     ├── numbers_auto.tex         — written by plot.py from the JSONs
-    └── table_*.tex              — written by plot.py
+    ├── numbers_mixed.tex        — written by plot.py (cpu-gpu-mixed + compat)
+    └── table_*.tex              — written by plot.py (incl. table_mixed,
+                                   table_compat)
 ```
 
 The 23 JSONs in `results/` are the metrics from the run reported in the
@@ -46,6 +52,36 @@ All four go through the same logical stages (`qc → preprocess → scale →
 pca`). The `scanpy-backed` config uses scanpy's own pipeline functions
 because backed-`'r'` `_CSRDataset` does not dispatch through the same
 omicverse paths.
+
+## CPU–GPU mixed mode (v0.1.7 supplementary)
+
+Two extra configs run the **identical** pipeline under
+`ov.settings.cpu_gpu_mixed_init()`, which routes PCA / neighbors / UMAP /
+clustering to torch-GPU:
+
+| config | backend | mode |
+|---|---|---|
+| `ov-oom-mixed`     | `anndataoom.read(path)`   | `cpu-gpu-mixed` |
+| `ov-anndata-mixed` | `anndata.read_h5ad(path)` | `cpu-gpu-mixed` |
+
+Run with `bash scripts/run_mixed_bench.sh` (needs a CUDA/MPS torch); each
+mixed JSON pairs with its `cpu` twin already in `results/`. `bench.py`
+records per-stage `gpu_peak_mb` and the device name.
+
+**Headline finding.** On the OOM backend the `qc → preprocess → scale →
+pca` pipeline is essentially **mode-invariant** — same wall-clock, same
+RSS, **zero GPU memory** — because anndataoom's chunked operators are
+pure-CPU and omicverse routes the OOM PCA through `anndataoom.chunked_pca`
+rather than the torch-GPU solver. The GPU only engages for the downstream
+graph/embedding steps that operate on the small `(n_obs × 50)` PCA matrix
+(`ov.pp.neighbors` ~8× faster on TS-5k). `compat_matrix.py` records the
+full `ov.pp.*` compatibility table (`results/compat_*.json` →
+`paper/table_compat.tex`).
+
+```bash
+python scripts/compat_matrix.py --input data/ts_5k.h5ad \
+    --backends oom --out results/compat_oom_ts5k.json
+```
 
 ## Reproducing
 

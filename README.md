@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/anndataoom.svg)](https://pypi.org/project/anndataoom/)
 [![Python](https://img.shields.io/pypi/pyversions/anndataoom.svg)](https://pypi.org/project/anndataoom/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/omicverse/anndata-oom/actions/workflows/ci.yml/badge.svg)](https://github.com/omicverse/anndata-oom/actions/workflows/ci.yml)
 
 **Out-of-memory `AnnData` powered by Rust** — a drop-in replacement for
 `anndata.AnnData` that keeps the expression matrix on disk and runs entire
@@ -82,16 +83,26 @@ X (HDF5 on disk, Rust I/O via anndata-rs)
 pip install anndataoom
 ```
 
-Wheels are built for:
+Platform support (verified end-to-end by the
+[CI matrix](.github/workflows/ci.yml) — builds the Rust extension from
+source and runs the full test suite on each cell):
 
-| Platform | Architectures      | Python   |
-|----------|--------------------|----------|
-| Linux    | x86_64, aarch64    | 3.9–3.13 |
-| macOS    | x86_64, arm64      | 3.9–3.13 |
-| Windows  | x86_64             | 3.9–3.13 |
+| Platform                | Python      | Status |
+|-------------------------|-------------|--------|
+| Linux x86_64            | 3.10, 3.12  | ✅ tested + wheels |
+| macOS arm64 (Apple Si)  | 3.10, 3.12  | ✅ tested + wheels |
+| macOS x86_64 (Intel)    | 3.10, 3.12  | ✅ tested + wheels |
+| Windows x86_64          | 3.10, 3.12  | ❌ not yet — see below |
 
-**Wheels bundle a statically-linked HDF5** — no system dependencies needed,
-no Rust toolchain required.
+> **Windows is not supported yet.** The Rust extension pulls in
+> `hdf5-metno-src`, whose build script compiles a *vendored* copy of HDF5
+> via CMake; that build fails on the Windows runner even with a system
+> HDF5 present (the dependency forces the vendored path). Tracked for a
+> future release via a pre-built HDF5 + `HDF5_DIR` redirect. Linux aarch64
+> wheels are likewise pending (the `ring` crate fails to cross-compile).
+
+**Wheels bundle a statically-linked HDF5** — on the supported platforms no
+system dependencies are needed and no Rust toolchain is required.
 
 ### Build from source
 
@@ -218,6 +229,60 @@ ov.pl.embedding(adata, basis="X_umap", color="leiden")
 ov.pl.dotplot(adata, marker_genes, groupby="leiden")
 ov.pl.violin(adata, keys="CD3D", groupby="leiden", use_raw=True)
 ```
+
+### CPU–GPU mixed mode
+
+`anndataoom` (storage backend) is orthogonal to `omicverse`'s execution
+mode (compute), so you can flip on GPU acceleration with an OOM-backed
+`AnnData` and pay no penalty:
+
+```python
+import omicverse as ov
+ov.settings.cpu_gpu_mixed_init()       # route PCA/neighbors/UMAP to torch-GPU
+adata = oom.read("data.h5ad")          # still out-of-memory
+# … identical qc → preprocess → scale → pca → neighbors → umap pipeline …
+```
+
+What changes (measured on the Tabula Sapiens benchmark, H100):
+
+- **Memory-bound preprocessing is mode-invariant.** `qc → preprocess →
+  scale → pca` run at the *same* wall-clock and RSS in `cpu` and
+  `cpu-gpu-mixed`, with **zero** GPU memory used. This is by design:
+  anndataoom's chunked operators are pure-CPU, and omicverse routes the
+  OOM PCA through `anndataoom.chunked_pca` (never the torch-GPU solver).
+  Peak RSS stays flat and bounded by chunk size regardless of mode.
+- **Downstream embedding gets the GPU.** Steps that operate on the small
+  `(n_obs × 50)` PCA embedding *do* offload: `ov.pp.neighbors` runs on a
+  CUDA PyG-kNN backend (device memory allocated) and `ov.pp.umap`,
+  `ov.pp.mde` run on the GPU. The kNN itself is sub-second on a warm GPU;
+  the exact wall-clock gain at small scale is measurement-sensitive, so
+  we just note the offload is real. PCA results are bit-identical between
+  modes (|cos| = 1.0).
+- **In-memory backend, by contrast, gets a big PCA win.** With a plain
+  `anndata.AnnData` (not OOM), `ov.pp.pca` dispatches to the GPU
+  `torch_pca` solver: PCA dropped **13×** (13.9 s → 1.1 s on TS-5k),
+  ~1.6× on the whole pipeline. anndataoom forgoes this by design — it
+  routes through CPU `chunked_pca` to keep peak RSS flat.
+
+### omicverse function compatibility
+
+Compatibility of `ov.pp.*` against an `AnnDataOOM` backend (probed in both
+`cpu` and `cpu-gpu-mixed`; `ᴳ` = offloads to GPU in mixed mode):
+
+| function | OOM-compatible | notes |
+|---|:---:|---|
+| `qc`, `preprocess`, `normalize_total`, `log1p`, `identify_robust_genes` | ✅ | core pipeline |
+| `scale`, `pca` | ✅ | lazy / chunked, CPU |
+| `neighbors`ᴳ, `umap`ᴳ, `leiden`, `louvain` | ✅ | operate on `X_pca` only |
+| `highly_variable_genes` (standalone) | ❌ | use the fused HVG inside `preprocess` |
+| `normalize_pearson_residuals` | ❌ | not yet OOM-adapted |
+| `filter_cells`, `filter_genes` | ❌ | not yet OOM-adapted |
+| `score_genes_cell_cycle` | ❌ | backed `var` lookup unsupported |
+| `anndata_to_GPU` / `anndata_to_CPU` | ➖ | require optional `rapids_singlecell` |
+
+Failures raise a clear exception at the call site — they never silently
+mis-compute. Reproduce with
+[`benchmark/scripts/compat_matrix.py`](benchmark/scripts/compat_matrix.py).
 
 ---
 

@@ -31,10 +31,58 @@ def _rss_mb() -> float:
     return psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
 
 
+def _gpu_mem_mb() -> float:
+    """Peak GPU memory (MB) allocated by torch so far, or 0 if no CUDA.
+
+    In cpu-gpu-mixed mode omicverse offloads PCA (and, where applicable,
+    neighbors/UMAP) to the GPU via torch. Host RSS no longer reflects the
+    true peak working set, so we also track ``torch.cuda.max_memory_allocated``
+    to tell the GPU-resident vs host-resident story apart."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.max_memory_allocated() / 1024 / 1024
+    except Exception:
+        pass
+    return 0.0
+
+
+def _reset_gpu_peak() -> None:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+    except Exception:
+        pass
+
+
+def _init_mode(mode: str) -> str:
+    """Set the omicverse execution mode and report the active device.
+
+    ``cpu``            — pure-CPU path (the v0.1.7 baseline).
+    ``cpu-gpu-mixed``  — ``ov.settings.cpu_gpu_mixed_init()``; PCA / neighbors /
+                          UMAP / clustering route to torch-GPU, preprocessing
+                          stays on CPU. Returns a short device tag for the JSON."""
+    import omicverse as ov
+    if mode == "cpu-gpu-mixed":
+        ov.settings.cpu_gpu_mixed_init()
+    else:
+        ov.settings.cpu_init()
+    dev = "cpu"
+    try:
+        import torch
+        if mode == "cpu-gpu-mixed" and torch.cuda.is_available():
+            dev = torch.cuda.get_device_name(0)
+    except Exception:
+        pass
+    return dev
+
+
 @contextmanager
 def stage(name: str, log: dict):
     """Capture wall time + RSS delta around a block."""
     gc.collect()
+    _reset_gpu_peak()
     rss0 = _rss_mb()
     t0 = time.perf_counter()
     try:
@@ -43,14 +91,17 @@ def stage(name: str, log: dict):
         elapsed = time.perf_counter() - t0
         gc.collect()
         rss1 = _rss_mb()
+        gpu_peak = _gpu_mem_mb()
         log[name] = {
             "seconds": round(elapsed, 4),
             "rss_mb_before": round(rss0, 1),
             "rss_mb_after":  round(rss1, 1),
             "rss_mb_delta":  round(rss1 - rss0, 1),
+            "gpu_peak_mb":   round(gpu_peak, 1),
         }
+        gpu_tag = f"  gpu_peak={gpu_peak:6.0f}MB" if gpu_peak else ""
         print(f"  {name:14s} {elapsed:7.2f}s  rss={rss0:6.0f}→{rss1:6.0f} MB "
-              f"(Δ {rss1 - rss0:+6.0f})")
+              f"(Δ {rss1 - rss0:+6.0f}){gpu_tag}")
 
 
 def _save_pca(adata, npy_path: Path):
@@ -117,10 +168,16 @@ def _restore_raw_counts_if_normalised(adata) -> str | None:
 
 
 def _run_omicverse(adata, pca_npy: Path | None = None,
-                    use_implicit_centering: bool = False) -> dict:
-    """Common omicverse pipeline body. Backend type drives the path."""
+                    use_implicit_centering: bool = False,
+                    mode: str = "cpu") -> dict:
+    """Common omicverse pipeline body. Backend type drives the path.
+
+    ``mode`` selects the omicverse execution backend (``cpu`` or
+    ``cpu-gpu-mixed``); the same logical stages run either way, so the
+    per-stage RSS / wall-clock / GPU-mem deltas isolate the accelerator cost."""
     import omicverse as ov
 
+    _init_mode(mode)
     log = {}
     restored = _restore_raw_counts_if_normalised(adata)
     if restored is not None:
@@ -152,14 +209,15 @@ def _run_omicverse(adata, pca_npy: Path | None = None,
     return log
 
 
-def run_ov_anndata(input_h5ad: Path, pca_npy: Path | None) -> dict:
+def run_ov_anndata(input_h5ad: Path, pca_npy: Path | None,
+                   mode: str = "cpu") -> dict:
     """omicverse pipeline on a regular in-memory AnnData (dense scale)."""
     import anndata
 
     log = {}
     with stage("load", log):
         adata = anndata.read_h5ad(str(input_h5ad))
-    log.update(_run_omicverse(adata, pca_npy=pca_npy))
+    log.update(_run_omicverse(adata, pca_npy=pca_npy, mode=mode))
     return log
 
 
@@ -180,7 +238,8 @@ def run_ov_anndata_implicit(input_h5ad: Path, pca_npy: Path | None) -> dict:
     return log
 
 
-def run_ov_oom(input_h5ad: Path, pca_npy: Path | None) -> dict:
+def run_ov_oom(input_h5ad: Path, pca_npy: Path | None,
+               mode: str = "cpu") -> dict:
     """omicverse pipeline on an AnnDataOOM (chunked, on-disk)."""
     import anndataoom as oom
 
@@ -188,7 +247,7 @@ def run_ov_oom(input_h5ad: Path, pca_npy: Path | None) -> dict:
     with stage("load", log):
         adata = oom.read(str(input_h5ad))
     try:
-        log.update(_run_omicverse(adata, pca_npy=pca_npy))
+        log.update(_run_omicverse(adata, pca_npy=pca_npy, mode=mode))
     finally:
         adata.close()
     return log
@@ -295,25 +354,42 @@ def main():
     ap.add_argument("--input", type=Path, required=True)
     ap.add_argument("--config", required=True,
                     choices=["ov-anndata", "ov-anndata-implicit",
-                             "scanpy-backed", "ov-oom"])
+                             "scanpy-backed", "ov-oom",
+                             "ov-oom-mixed", "ov-anndata-mixed"])
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
-    print(f"[{args.config}] {args.input.name}")
+    # The `-mixed` configs run the identical pipeline under
+    # ov.settings.cpu_gpu_mixed_init(); everything else stays on CPU. The
+    # config name is the only axis that varies, so the mixed-vs-cpu JSON
+    # deltas isolate the GPU-offload cost (PCA / neighbors / UMAP).
+    mode = "cpu-gpu-mixed" if args.config.endswith("-mixed") else "cpu"
+
+    print(f"[{args.config}] {args.input.name}  (mode={mode})")
     t0 = time.perf_counter()
     pca_npy = args.out.with_suffix(".pca.npy")
-    if args.config == "ov-anndata":
-        log = run_ov_anndata(args.input, pca_npy=pca_npy)
+    device = "cpu"
+    if args.config in ("ov-anndata", "ov-anndata-mixed"):
+        log = run_ov_anndata(args.input, pca_npy=pca_npy, mode=mode)
     elif args.config == "ov-anndata-implicit":
         log = run_ov_anndata_implicit(args.input, pca_npy=pca_npy)
     elif args.config == "scanpy-backed":
         log = run_scanpy_backed(args.input, pca_npy=pca_npy)
-    else:
-        log = run_ov_oom(args.input, pca_npy=pca_npy)
+    else:  # ov-oom / ov-oom-mixed
+        log = run_ov_oom(args.input, pca_npy=pca_npy, mode=mode)
+    if mode == "cpu-gpu-mixed":
+        try:
+            import torch
+            if torch.cuda.is_available():
+                device = torch.cuda.get_device_name(0)
+        except Exception:
+            pass
     total = time.perf_counter() - t0
 
     out = {
         "config": args.config,
+        "mode": mode,
+        "device": device,
         "input": str(args.input),
         "input_mb": round(args.input.stat().st_size / 1024 / 1024, 1),
         "total_seconds": round(total, 4),

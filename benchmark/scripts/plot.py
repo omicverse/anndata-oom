@@ -35,6 +35,15 @@ DATASETS = [
     ("ts_1M",        1_053_033, 60_606, "TS-1M",        "Tabula Sapiens stromal+epi+immune (concat)"),
 ]
 
+# On-disk h5ad sizes (MB) — baked in so the datasets table stays correct
+# even when the (multi-GB, git-ignored) data/ files are not present at plot
+# time. A live file under data/ overrides these.
+ONDISK_MB = {
+    "ts_5k": 130.1, "ts_10k": 222.5, "ts_vasculature": 2081.8,
+    "ts_stromal": 9594.1, "ts_epithelial": 11066.5,
+    "ts_immune": 18858.0, "ts_1M": 15439.3,
+}
+
 CONFIGS = [
     ("ov-anndata",          "ov + anndata (in-mem, dense scale)"),
     ("ov-anndata-implicit", "ov + anndata (in-mem, implicit scale v0.1.7)"),
@@ -195,7 +204,7 @@ def table_datasets():
     ]
     for key, n_cells, n_genes, label, src in DATASETS:
         p = ROOT / "data" / f"{key}.h5ad"
-        sz = p.stat().st_size / 1024 / 1024 if p.exists() else 0.0
+        sz = p.stat().st_size / 1024 / 1024 if p.exists() else ONDISK_MB.get(key, 0.0)
         lines.append(
             f"{label} & {n_cells:,} & {n_genes:,} & {sz:.1f} & {src} \\\\"
         )
@@ -367,6 +376,241 @@ def write_numbers(res):
     print(f"wrote {out}")
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# CPU vs CPU-GPU-mixed comparison (v0.1.7 supplementary experiment).
+#
+# The `-mixed` configs run the identical pipeline under
+# ov.settings.cpu_gpu_mixed_init(). We pair each CPU config with its mixed
+# twin and report the wall-clock / peak-RSS / peak-GPU deltas. The headline
+# finding: the OOM qc→preprocess→scale→pca pipeline is CPU-bound either way
+# (anndataoom's chunked ops are pure-CPU and omicverse routes OOM PCA to
+# chunked_pca, never the torch-GPU path), so mixed ≈ cpu there; the GPU only
+# helps the downstream graph / embedding / clustering steps.
+# ─────────────────────────────────────────────────────────────────────────
+
+MIXED_PAIRS = [
+    ("ov-oom",     "ov-oom-mixed",     "OOM (anndataoom)"),
+    ("ov-anndata", "ov-anndata-mixed", "in-memory dense"),
+]
+MIXED_COLOR = {"cpu": "#5e80b4", "cpu-gpu-mixed": "#e07a3c"}
+
+
+def _load_one(cfg, key):
+    p = RES / f"{cfg}__{key}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def peak_gpu(r):
+    """Peak torch GPU memory (MB) across stages, 0 if pure-CPU run."""
+    if not r:
+        return 0.0
+    return max((s.get("gpu_peak_mb", 0) for s in r["stages"].values()
+               if isinstance(s, dict)), default=0.0)
+
+
+def fig_mixed():
+    """Two panels: cpu-vs-mixed total wall-clock, and the per-config speedup
+    ratio (cpu / mixed) across dataset sizes, for each paired backend."""
+    n_cells = np.array([d[1] for d in DATASETS])
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
+    have_any = False
+
+    ax = axes[0]
+    for cpu_cfg, mix_cfg, label in MIXED_PAIRS:
+        for cfg, ls, mode in ((cpu_cfg, "-", "cpu"), (mix_cfg, "--", "cpu-gpu-mixed")):
+            ys = [(_load_one(cfg, k)["total_seconds"] if _load_one(cfg, k) else np.nan)
+                  for k, *_ in DATASETS]
+            if np.all(np.isnan(ys)):
+                continue
+            have_any = True
+            ax.plot(n_cells, ys, marker="o", lw=2.0, ls=ls,
+                    color=MIXED_COLOR[mode],
+                    label=f"{label} · {mode}")
+    ax.set_xscale("log"); ax.set_yscale("log")
+    ax.set_xlabel("cells"); ax.set_ylabel("wall-clock (s)")
+    ax.set_title("(a) cpu vs cpu-gpu-mixed: pipeline time")
+    ax.grid(True, which="both", lw=0.3, alpha=0.4)
+    ax.legend(loc="upper left", fontsize=7.5, frameon=False)
+
+    ax = axes[1]
+    for cpu_cfg, mix_cfg, label in MIXED_PAIRS:
+        ratios = []
+        for k, *_ in DATASETS:
+            rc, rm = _load_one(cpu_cfg, k), _load_one(mix_cfg, k)
+            ratios.append(rc["total_seconds"] / rm["total_seconds"]
+                          if (rc and rm) else np.nan)
+        if np.all(np.isnan(ratios)):
+            continue
+        ax.plot(n_cells, ratios, marker="s", lw=2.0, label=label)
+    ax.axhline(1.0, color="grey", lw=0.8, ls=":")
+    ax.set_xscale("log")
+    ax.set_xlabel("cells"); ax.set_ylabel("speedup (cpu time / mixed time)")
+    ax.set_title("(b) mixed-mode speedup (>1 = mixed faster)")
+    ax.grid(True, which="both", lw=0.3, alpha=0.4)
+    ax.legend(loc="best", fontsize=8, frameon=False)
+
+    if not have_any:
+        plt.close(fig); print("fig_mixed: no mixed results yet — skipped"); return
+    fig.tight_layout()
+    for ext in ("pdf", "png"):
+        fig.savefig(FIG / f"fig_mixed.{ext}", bbox_inches="tight",
+                    dpi=150 if ext == "png" else None)
+    plt.close(fig)
+    print(f"wrote {FIG/'fig_mixed.pdf'}")
+
+
+def table_mixed():
+    """Per-dataset cpu-vs-mixed wall-clock / peak-RSS / peak-GPU table."""
+    rows, any_data = [], False
+    for cpu_cfg, mix_cfg, label in MIXED_PAIRS:
+        for key, *_, dlabel, _ in DATASETS:
+            rc, rm = _load_one(cpu_cfg, key), _load_one(mix_cfg, key)
+            if rc is None and rm is None:
+                continue
+            any_data = True
+            tc = total_time(rc) if rc else None
+            tm = total_time(rm) if rm else None
+            spd = (tc / tm) if (tc and tm) else None
+            rows.append((label, dlabel,
+                         _f(tc), _f(peak_rss(rc) if rc else None),
+                         _f(tm), _f(peak_rss(rm) if rm else None),
+                         _f(peak_gpu(rm) if rm else None),
+                         f"{spd:.2f}" if spd else "--"))
+    lines = ["\\begin{tabular}{llrrrrrr}", "\\toprule",
+             "Backend & Dataset & \\multicolumn{2}{c}{cpu} & "
+             "\\multicolumn{3}{c}{cpu-gpu-mixed} & speedup \\\\",
+             "& & t (s) & RSS (MB) & t (s) & RSS (MB) & GPU (MB) & "
+             "$t_{\\mathrm{cpu}}/t_{\\mathrm{mix}}$ \\\\", "\\midrule"]
+    for r in rows:
+        lines.append(" & ".join(r) + " \\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    out = PAPER / "table_mixed.tex"
+    if not any_data:
+        print("table_mixed: no mixed results yet — skipped"); return
+    out.write_text("\n".join(lines))
+    print(f"wrote {out}")
+
+
+# Categorise compat-matrix functions for the LaTeX table / counts.
+_COMPAT_ORDER = [
+    "qc", "preprocess", "scale", "pca", "neighbors", "leiden", "louvain",
+    "umap", "tsne", "mde", "sude", "normalize_total", "log1p",
+    "identify_robust_genes", "highly_variable_features",
+    "highly_variable_genes", "normalize_pearson_residuals", "regress",
+    "scrublet", "score_genes_cell_cycle",
+    "filter_cells", "filter_genes", "anndata_to_GPU", "anndata_to_CPU",
+]
+
+
+def _load_compat():
+    """Merge all compat_*.json into {func: {(backend,mode): rec}}; also the
+    richest (largest-input) track wins for the per-func timing shown."""
+    merged = {}
+    inputs = {}
+    for p in sorted(RES.glob("compat_*.json")):
+        d = json.loads(p.read_text())
+        for tr in d["tracks"]:
+            key = (tr["backend"], tr["mode"])
+            for rec in tr["results"]:
+                merged.setdefault(rec["name"], {})[key] = rec
+                inputs[key] = d.get("input", "")
+    return merged, inputs
+
+
+def table_compat():
+    """omicverse-function × {cpu, mixed} compatibility table for the OOM
+    backend, read from results/compat_*.json."""
+    merged, _ = _load_compat()
+    if not merged:
+        print("table_compat: no compat results — skipped"); return
+    def cell(rec):
+        if rec is None:
+            return "--"
+        if rec["status"] == "ok":
+            g = rec.get("gpu_mb", 0)
+            tag = f"\\,\\textsuperscript{{G}}" if g and g > 1 else ""
+            return f"\\cmark{tag}"
+        # short failure reason
+        err = rec.get("error", "").split(":")[0]
+        return f"\\xmark"
+    lines = ["\\begin{tabular}{lcccr}", "\\toprule",
+             "\\texttt{ov.pp} function & cpu & mixed & GPU-offload & "
+             "note \\\\", "\\midrule"]
+    notes = {
+        "highly_variable_genes": "standalone; use \\texttt{preprocess}",
+        "normalize_pearson_residuals": "not OOM-adapted",
+        "score_genes_cell_cycle": "h5 var lookup",
+        "filter_cells": "not OOM-adapted",
+        "filter_genes": "not OOM-adapted",
+        "anndata_to_GPU": "needs rapids",
+        "anndata_to_CPU": "needs rapids",
+    }
+    bs = "\\_"
+    for fn in _COMPAT_ORDER:
+        if fn not in merged:
+            continue
+        cpu = merged[fn].get(("oom", "cpu"))
+        mix = merged[fn].get(("oom", "cpu-gpu-mixed"))
+        gpu = "yes" if (mix and mix.get("gpu_mb", 0) > 1 and mix["status"] == "ok") else "--"
+        fn_tex = fn.replace("_", bs)
+        note = notes.get(fn, "")
+        lines.append("\\texttt{" + fn_tex + "} & " + cell(cpu) + " & "
+                     + cell(mix) + " & " + gpu + " & " + note + " \\\\")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    (PAPER / "table_compat.tex").write_text("\n".join(lines))
+    print(f"wrote {PAPER/'table_compat.tex'}")
+
+
+def write_numbers_mixed():
+    """Mixed-mode + compat macros → numbers_mixed.tex (input by main.tex)."""
+    lines = ["% Auto-generated by scripts/plot.py — mixed-mode + compat."]
+    def cmd(n, v): lines.append(f"\\newcommand{{\\{n}}}{{{v}}}")
+
+    # Largest OOM pair where both cpu and mixed completed → headline delta.
+    for key, n, *_, label, _ in reversed(DATASETS):
+        rc, rm = _load_one("ov-oom", key), _load_one("ov-oom-mixed", key)
+        if rc and rm:
+            cmd("mixedOomLabel", label)
+            cmd("mixedOomCells", f"{n:,}")
+            cmd("mixedOomCpuSec", f"{total_time(rc):.0f}")
+            cmd("mixedOomMixSec", f"{total_time(rm):.0f}")
+            cmd("mixedOomSpeedup", f"{total_time(rc)/total_time(rm):.2f}")
+            cmd("mixedOomCpuRssGB", f"{peak_rss(rc)/1024:.1f}")
+            cmd("mixedOomMixRssGB", f"{peak_rss(rm)/1024:.1f}")
+            cmd("mixedOomGpuMB", f"{peak_gpu(rm):.0f}")
+            break
+
+    # In-memory dense path: GPU torch_pca speedup (the contrast to OOM).
+    for key, n, *_, label, _ in reversed(DATASETS):
+        rc, rm = _load_one("ov-anndata", key), _load_one("ov-anndata-mixed", key)
+        if rc and rm:
+            pc = rc["stages"].get("pca", {}).get("seconds")
+            pm = rm["stages"].get("pca", {}).get("seconds")
+            cmd("mixedAnnLabel", label)
+            cmd("mixedAnnCells", f"{n:,}")
+            if pc and pm:
+                cmd("mixedAnnPcaCpuSec", f"{pc:.1f}")
+                cmd("mixedAnnPcaMixSec", f"{pm:.1f}")
+                cmd("mixedAnnPcaSpeedup", f"{pc/pm:.0f}")
+            cmd("mixedAnnTotalSpeedup", f"{total_time(rc)/total_time(rm):.2f}")
+            cmd("mixedAnnPcaGpuMB", f"{peak_gpu(rm):.0f}")
+            break
+
+    # Compat counts. (We deliberately do NOT emit a neighbors wall-clock
+    # speedup: at 5k cells the GPU kNN is sub-second and the ratio is
+    # measurement-sensitive — the robust claim is the offload itself, plus
+    # the bit-stable in-memory PCA speedup above.)
+    merged, _ = _load_compat()
+    if merged:
+        ok = sum(1 for f in merged.values()
+                 if (f.get(("oom","cpu")) or {}).get("status") == "ok")
+        tot = len(merged)
+        cmd("compatNFuncs", str(tot))
+        cmd("compatNOk", str(ok))
+    (PAPER / "numbers_mixed.tex").write_text("\n".join(lines) + "\n")
+    print(f"wrote {PAPER/'numbers_mixed.tex'}")
+
+
 def main():
     res = load_results()
     print(f"loaded {sum(v is not None for v in res.values())}/{len(res)} results")
@@ -375,6 +619,11 @@ def main():
     table_datasets()
     table_headline(res)
     write_numbers(res)
+    # v0.1.7 supplementary: cpu-gpu-mixed comparison + compatibility matrix.
+    fig_mixed()
+    table_mixed()
+    table_compat()
+    write_numbers_mixed()
 
 
 if __name__ == "__main__":
