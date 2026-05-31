@@ -239,6 +239,15 @@ def chunked_normalize_total(
     normalisation on-the-fly during chunked reads.
 
     Sets ``adata.layers['counts']`` to the original (raw) X.
+
+    Side product: captures per-gene total counts and per-gene
+    ``E[count^2]`` in the same chunked pass that computes the per-cell
+    totals, and stashes them in ``adata.uns['_pearson_precompute']``.
+    These are exactly the Pass-1 quantities
+    :func:`chunked_pearson_residual_variance` would otherwise scan
+    ``X`` a second time to gather, so downstream HVG selection on this
+    same raw counts matrix can skip that scan (a ~30% reduction on the
+    full preprocess pipeline; the HVG numba kernel still runs Pass 2).
     """
     X = adata.X
     n_obs, n_vars = X.shape
@@ -246,18 +255,31 @@ def chunked_normalize_total(
     # --- Save raw counts as a lazy reference (no copy!) ---
     adata.layers["counts"] = X  # BackedArray reference, zero memory cost
 
+    # Accumulators for the Pearson-HVG precompute (always populated; the
+    # downstream pearson_residual_variance call may or may not use them).
+    sums_genes = np.zeros(n_vars, dtype=np.float64)
+    sq_sums_genes = np.zeros(n_vars, dtype=np.float64)
+
     gene_subset = None
     if exclude_highly_expressed:
-        # Single-pass: compute row sums AND per-gene high-expression counts together
+        # Single-pass: compute row sums AND per-gene high-expression counts
+        # AND per-gene totals + E[count^2] all from the same chunk read.
         counts_per_cell = np.zeros(n_obs, dtype=np.float64)
         gene_hi_count = np.zeros(n_vars, dtype=np.int64)
         for start, end, chunk in X.chunked(chunk_size):
             if issparse(chunk):
                 row_sums = np.asarray(chunk.sum(axis=1)).ravel()
+                sums_genes += np.asarray(chunk.sum(axis=0)).ravel()
+                sq_sums_genes += np.asarray(
+                    chunk.power(2).sum(axis=0)
+                ).ravel()
                 dense = chunk.toarray()
             else:
-                row_sums = chunk.sum(axis=1)
-                dense = chunk
+                chunk64 = chunk.astype(np.float64, copy=False)
+                row_sums = chunk64.sum(axis=1)
+                sums_genes += chunk64.sum(axis=0)
+                sq_sums_genes += (chunk64 ** 2).sum(axis=0)
+                dense = chunk64
             counts_per_cell[start:end] = row_sums
             thresholds = row_sums * max_fraction
             gene_hi_count += (dense > thresholds[:, np.newaxis]).sum(axis=0)
@@ -267,7 +289,8 @@ def chunked_normalize_total(
         if n_excluded > 0:
             logger.info("Excluding %d highly-expressed genes from normalization", n_excluded)
 
-        # Second pass: recompute row sums using only non-highly-expressed genes
+        # Second pass: recompute row sums using only non-highly-expressed genes.
+        # (Pearson-HVG precompute uses the unfiltered sums from above.)
         gene_indices = np.where(gene_subset)[0]
         counts_per_cell = np.zeros(n_obs, dtype=np.float64)
         for start, end, chunk in X.chunked(chunk_size):
@@ -278,8 +301,22 @@ def chunked_normalize_total(
             else:
                 counts_per_cell[start:end] = chunk[:, gene_indices].sum(axis=1)
     else:
-        # --- Compute per-cell total counts (single pass) ---
-        counts_per_cell = X.sum(axis=1, chunk_size=chunk_size)
+        # Single pass: per-cell sums + per-gene totals + per-gene E[count^2].
+        counts_per_cell = np.zeros(n_obs, dtype=np.float64)
+        for start, end, chunk in X.chunked(chunk_size):
+            if issparse(chunk):
+                counts_per_cell[start:end] = np.asarray(
+                    chunk.sum(axis=1)
+                ).ravel()
+                sums_genes += np.asarray(chunk.sum(axis=0)).ravel()
+                sq_sums_genes += np.asarray(
+                    chunk.power(2).sum(axis=0)
+                ).ravel()
+            else:
+                chunk64 = chunk.astype(np.float64, copy=False)
+                counts_per_cell[start:end] = chunk64.sum(axis=1)
+                sums_genes += chunk64.sum(axis=0)
+                sq_sums_genes += (chunk64 ** 2).sum(axis=0)
 
     # --- Determine target_sum ---
     if target_sum is None:
@@ -296,6 +333,19 @@ def chunked_normalize_total(
     norm_factors[norm_factors == 0] = 1.0
     # Store for reference
     adata.obs["_norm_factor"] = norm_factors
+
+    # Stash the per-gene Pass-1 stats so a downstream Pearson-HVG call on
+    # this raw-counts matrix (`layer='counts'`) can skip its own first pass.
+    # n_obs is included so the consumer can detect a stale precompute if the
+    # caller subsets the adata between normalize_total and HVG.
+    adata.uns["_pearson_precompute"] = {
+        "sums_cells": counts_per_cell.copy(),
+        "sums_genes": sums_genes,
+        "sq_sums_genes": sq_sums_genes,
+        "sum_total": float(sums_genes.sum()),
+        "n_obs": int(n_obs),
+        "n_vars": int(n_vars),
+    }
 
     # --- Wrap X with lazy normalization ---
     adata.X = TransformedBackedArray(X, norm_factors=norm_factors)
@@ -860,12 +910,14 @@ def chunked_pearson_residual_variance(
     theta: float = 100.0,
     clip: float | None = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
+    precomputed: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute per-gene variance of clipped Pearson residuals, fully chunked.
 
-    Only 2 passes over the data:
-    - Pass 1: per-gene sums and per-cell sums
-    - Pass 2: accumulate sum(res) and sum(res²) per gene
+    Two passes over the data:
+    - Pass 1: per-gene sums and per-cell sums (skipped when
+      ``precomputed`` is provided -- see below)
+    - Pass 2: accumulate sum(res) and sum(res^2) per gene
 
     Parameters
     ----------
@@ -875,6 +927,15 @@ def chunked_pearson_residual_variance(
         Negative binomial overdispersion parameter.
     clip : float or None
         Clip residuals to [-clip, clip]. If None, uses sqrt(n_obs).
+    precomputed : dict or None
+        When the caller has already computed the Pass-1 stats on the same
+        matrix (e.g. as a side product of :func:`chunked_normalize_total`,
+        which stashes them in ``adata.uns['_pearson_precompute']``), they
+        can be threaded in via this dict to skip Pass 1 entirely. Required
+        keys: ``sums_cells`` (len n_obs), ``sums_genes`` (len n_vars),
+        ``sq_sums_genes`` (len n_vars), ``sum_total`` (scalar). A bare
+        shape check (against ``X.shape``) guards against passing stats
+        from a stale precompute (e.g. after an obs/var subset).
 
     Returns
     -------
@@ -889,23 +950,39 @@ def chunked_pearson_residual_variance(
     if clip is None:
         clip = np.sqrt(n_obs)
 
-    # --- Pass 1: per-gene and per-cell sums ---
-    sums_genes = np.zeros(n_vars, dtype=np.float64)
-    sums_cells = np.zeros(n_obs, dtype=np.float64)
-    sq_sums_genes = np.zeros(n_vars, dtype=np.float64)  # for gene_var
+    if precomputed is not None:
+        # Cheap sanity check; the caller is responsible for staleness.
+        sums_cells = np.asarray(precomputed["sums_cells"], dtype=np.float64)
+        sums_genes = np.asarray(precomputed["sums_genes"], dtype=np.float64)
+        sq_sums_genes = np.asarray(
+            precomputed["sq_sums_genes"], dtype=np.float64
+        )
+        if sums_cells.shape[0] != n_obs or sums_genes.shape[0] != n_vars:
+            raise ValueError(
+                "Stale precomputed Pearson stats: shapes "
+                f"({sums_cells.shape[0]}, {sums_genes.shape[0]}) do not "
+                f"match X ({n_obs}, {n_vars}). Was the adata subset between "
+                "normalize_total and HVG?"
+            )
+        sum_total = float(precomputed.get("sum_total", sums_genes.sum()))
+    else:
+        # --- Pass 1: per-gene and per-cell sums ---
+        sums_genes = np.zeros(n_vars, dtype=np.float64)
+        sums_cells = np.zeros(n_obs, dtype=np.float64)
+        sq_sums_genes = np.zeros(n_vars, dtype=np.float64)  # for gene_var
 
-    for start, end, chunk in X.chunked(chunk_size):
-        if issparse(chunk):
-            sums_cells[start:end] = np.asarray(chunk.sum(axis=1)).ravel()
-            sums_genes += np.asarray(chunk.sum(axis=0)).ravel()
-            sq_sums_genes += np.asarray(chunk.power(2).sum(axis=0)).ravel()
-        else:
-            chunk64 = chunk.astype(np.float64)
-            sums_cells[start:end] = chunk64.sum(axis=1)
-            sums_genes += chunk64.sum(axis=0)
-            sq_sums_genes += (chunk64 ** 2).sum(axis=0)
+        for start, end, chunk in X.chunked(chunk_size):
+            if issparse(chunk):
+                sums_cells[start:end] = np.asarray(chunk.sum(axis=1)).ravel()
+                sums_genes += np.asarray(chunk.sum(axis=0)).ravel()
+                sq_sums_genes += np.asarray(chunk.power(2).sum(axis=0)).ravel()
+            else:
+                chunk64 = chunk.astype(np.float64)
+                sums_cells[start:end] = chunk64.sum(axis=1)
+                sums_genes += chunk64.sum(axis=0)
+                sq_sums_genes += (chunk64 ** 2).sum(axis=0)
 
-    sum_total = sums_genes.sum()
+        sum_total = sums_genes.sum()
     gene_mean = sums_genes / n_obs
     gene_var = sq_sums_genes / n_obs - gene_mean ** 2
 
@@ -947,11 +1024,20 @@ def chunked_highly_variable_genes_pearson(
     batch_key: str | None = None,
     layer: str | None = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
+    precomputed: dict | None = "auto",
 ) -> None:
     """HVG selection via Pearson residuals, fully chunked.
 
-    Replaces the scanpy implementation for AnnDataOOM — never
+    Replaces the scanpy implementation for AnnDataOOM -- never
     materialises the full count matrix.
+
+    When ``chunked_normalize_total`` has just run on the same matrix it
+    leaves a precompute dict in ``adata.uns['_pearson_precompute']`` that
+    contains the per-gene / per-cell stats this function would otherwise
+    spend a full chunked Pass 1 to gather. Pass ``precomputed='auto'``
+    (the default) to opportunistically consume it when present and
+    shape-compatible, ``None`` to force a full two-pass run, or an
+    explicit dict to override.
     """
     import pandas as pd
 
@@ -960,9 +1046,23 @@ def chunked_highly_variable_genes_pearson(
     else:
         X = adata.X
 
+    # Resolve auto-precompute: fish it out of adata.uns if it's there and
+    # still matches X's shape. The single-batch path is the only one that
+    # uses the global precompute -- the per-batch path needs per-batch
+    # sums that the normalize_total pass does not split out.
+    if precomputed == "auto":
+        precomputed = adata.uns.get("_pearson_precompute") \
+            if batch_key is None else None
+        # Drop stale precomputes (caller subset the data in between).
+        if (precomputed is not None
+                and (precomputed.get("n_obs") != X.shape[0]
+                     or precomputed.get("n_vars") != X.shape[1])):
+            precomputed = None
+
     if batch_key is None:
         residual_var, gene_mean, gene_var = chunked_pearson_residual_variance(
             X, theta=theta, clip=clip, chunk_size=chunk_size,
+            precomputed=precomputed,
         )
 
         # Rank and select top genes
