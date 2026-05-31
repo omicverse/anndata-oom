@@ -1,0 +1,39 @@
+{
+  "config": "scanpy-backed",
+  "input": "data/ts_stromal.h5ad",
+  "input_mb": 9594.1,
+  "total_seconds": 352.076,
+  "stages": {
+    "load": {
+      "seconds": 59.2438,
+      "rss_mb_before": 515.1,
+      "rss_mb_after": 19443.6,
+      "rss_mb_delta": 18928.5
+    },
+    "qc": {
+      "seconds": 64.7209,
+      "rss_mb_before": 19443.6,
+      "rss_mb_after": 28839.0,
+      "rss_mb_delta": 9395.4
+    },
+    "preprocess": {
+      "seconds": 88.8275,
+      "rss_mb_before": 28839.0,
+      "rss_mb_after": 40966.6,
+      "rss_mb_delta": 12127.6
+    },
+    "scale": {
+      "seconds": 81.3274,
+      "rss_mb_before": 40966.6,
+      "rss_mb_after": 142494.3,
+      "rss_mb_delta": 101527.7
+    },
+    "pca": {
+      "seconds": 50.7501,
+      "rss_mb_before": 142494.3,
+      "rss_mb_after": 142946.8,
+      "rss_mb_delta": 452.5
+    },
+    "_pca_key": "X_pca"
+  }
+}

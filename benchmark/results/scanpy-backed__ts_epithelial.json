@@ -1,0 +1,39 @@
+{
+  "config": "scanpy-backed",
+  "input": "data/ts_epithelial.h5ad",
+  "input_mb": 11066.5,
+  "total_seconds": 364.315,
+  "stages": {
+    "load": {
+      "seconds": 87.4586,
+      "rss_mb_before": 515.2,
+      "rss_mb_after": 22370.8,
+      "rss_mb_delta": 21855.6
+    },
+    "qc": {
+      "seconds": 81.3131,
+      "rss_mb_before": 22370.8,
+      "rss_mb_after": 33490.6,
+      "rss_mb_delta": 11119.7
+    },
+    "preprocess": {
+      "seconds": 80.2159,
+      "rss_mb_before": 33490.6,
+      "rss_mb_after": 47546.5,
+      "rss_mb_delta": 14056.0
+    },
+    "scale": {
+      "seconds": 70.0303,
+      "rss_mb_before": 47546.5,
+      "rss_mb_after": 145959.0,
+      "rss_mb_delta": 98412.4
+    },
+    "pca": {
+      "seconds": 39.1868,
+      "rss_mb_before": 145959.0,
+      "rss_mb_after": 146413.1,
+      "rss_mb_delta": 454.1
+    },
+    "_pca_key": "X_pca"
+  }
+}

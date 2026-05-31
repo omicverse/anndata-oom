@@ -1,0 +1,39 @@
+{
+  "config": "ov-oom",
+  "input": "data/ts_epithelial.h5ad",
+  "input_mb": 11066.5,
+  "total_seconds": 884.0647,
+  "stages": {
+    "load": {
+      "seconds": 6.8596,
+      "rss_mb_before": 104.0,
+      "rss_mb_after": 1516.8,
+      "rss_mb_delta": 1412.8
+    },
+    "qc": {
+      "seconds": 232.3229,
+      "rss_mb_before": 1526.3,
+      "rss_mb_after": 1786.2,
+      "rss_mb_delta": 259.9
+    },
+    "preprocess": {
+      "seconds": 405.1251,
+      "rss_mb_before": 1786.2,
+      "rss_mb_after": 1770.3,
+      "rss_mb_delta": -15.9
+    },
+    "scale": {
+      "seconds": 55.1802,
+      "rss_mb_before": 1770.3,
+      "rss_mb_after": 1807.4,
+      "rss_mb_delta": 37.1
+    },
+    "pca": {
+      "seconds": 181.9259,
+      "rss_mb_before": 1807.4,
+      "rss_mb_after": 2166.5,
+      "rss_mb_delta": 359.2
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

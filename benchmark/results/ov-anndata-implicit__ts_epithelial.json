@@ -1,0 +1,39 @@
+{
+  "config": "ov-anndata-implicit",
+  "input": "data/ts_epithelial.h5ad",
+  "input_mb": 11066.5,
+  "total_seconds": 778.4581,
+  "stages": {
+    "load": {
+      "seconds": 186.3088,
+      "rss_mb_before": 458.2,
+      "rss_mb_after": 43898.3,
+      "rss_mb_delta": 43440.1
+    },
+    "qc": {
+      "seconds": 173.9604,
+      "rss_mb_before": 33367.2,
+      "rss_mb_after": 33455.2,
+      "rss_mb_delta": 88.1
+    },
+    "preprocess": {
+      "seconds": 357.0538,
+      "rss_mb_before": 33455.2,
+      "rss_mb_after": 40391.4,
+      "rss_mb_delta": 6936.2
+    },
+    "scale": {
+      "seconds": 33.6116,
+      "rss_mb_before": 40391.4,
+      "rss_mb_after": 47413.4,
+      "rss_mb_delta": 7022.0
+    },
+    "pca": {
+      "seconds": 16.4237,
+      "rss_mb_before": 47413.4,
+      "rss_mb_after": 47813.0,
+      "rss_mb_delta": 399.6
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "config": "ov-oom",
+  "input": "data/ts_vasculature.h5ad",
+  "input_mb": 2081.8,
+  "total_seconds": 175.3028,
+  "stages": {
+    "load": {
+      "seconds": 4.1709,
+      "rss_mb_before": 103.9,
+      "rss_mb_after": 816.4,
+      "rss_mb_delta": 712.5
+    },
+    "qc": {
+      "seconds": 44.6554,
+      "rss_mb_before": 834.2,
+      "rss_mb_after": 1087.7,
+      "rss_mb_delta": 253.5
+    },
+    "preprocess": {
+      "seconds": 75.926,
+      "rss_mb_before": 1087.7,
+      "rss_mb_after": 1091.5,
+      "rss_mb_delta": 3.8
+    },
+    "scale": {
+      "seconds": 10.4681,
+      "rss_mb_before": 1091.5,
+      "rss_mb_after": 1039.7,
+      "rss_mb_delta": -51.8
+    },
+    "pca": {
+      "seconds": 37.7524,
+      "rss_mb_before": 1039.7,
+      "rss_mb_after": 1156.3,
+      "rss_mb_delta": 116.7
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

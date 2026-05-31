@@ -1,0 +1,39 @@
+{
+  "config": "scanpy-backed",
+  "input": "data/ts_vasculature.h5ad",
+  "input_mb": 2081.8,
+  "total_seconds": 70.5532,
+  "stages": {
+    "load": {
+      "seconds": 12.7045,
+      "rss_mb_before": 515.2,
+      "rss_mb_after": 4630.4,
+      "rss_mb_delta": 4115.2
+    },
+    "qc": {
+      "seconds": 15.5482,
+      "rss_mb_before": 4630.4,
+      "rss_mb_after": 6672.1,
+      "rss_mb_delta": 2041.7
+    },
+    "preprocess": {
+      "seconds": 14.4281,
+      "rss_mb_before": 6672.1,
+      "rss_mb_after": 9271.6,
+      "rss_mb_delta": 2599.5
+    },
+    "scale": {
+      "seconds": 11.499,
+      "rss_mb_before": 9271.6,
+      "rss_mb_after": 27692.5,
+      "rss_mb_delta": 18420.9
+    },
+    "pca": {
+      "seconds": 11.543,
+      "rss_mb_before": 27692.5,
+      "rss_mb_after": 27802.9,
+      "rss_mb_delta": 110.3
+    },
+    "_pca_key": "X_pca"
+  }
+}

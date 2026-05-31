@@ -1,0 +1,14 @@
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{\texttt{ov-anndata}} & \multicolumn{2}{c}{\texttt{ov-anndata\textsuperscript{*}}} & \multicolumn{2}{c}{\texttt{scanpy-backed}} & \multicolumn{2}{c}{\texttt{ov-oom}} \\
+ & t (s) & RSS (MB) & t (s) & RSS (MB) & t (s) & RSS (MB) & t (s) & RSS (MB) \\
+\midrule
+TS-5k & 34.9 & 2701.2 & 28.5 & 1452.6 & 17.2 & 3285.4 & 28.3 & 847.0 \\
+TS-10k & 89.0 & 4699.6 & 33.2 & 2198.1 & 25.6 & 5924.6 & 47.3 & 953.3 \\
+TS-Vasc & 229.6 & 20077.7 & 175.8 & 9467.8 & 70.6 & 27802.9 & 175.3 & 1156.3 \\
+TS-Stromal & 837.9 & 99550.2 & 795.5 & 41371.4 & 352.1 & 142946.8 & 809.4 & 2196.4 \\
+TS-Epi & 873.9 & 107061.8 & 778.5 & 47813.0 & 364.3 & 146413.1 & 884.1 & 2166.5 \\
+TS-Immune & OOM & -- & 1614.3 & 78933.8 & OOM & -- & 1653.5 & 3487.7 \\
+TS-1M & OOM & -- & OOM & -- & OOM & -- & 2993.9 & 5061.1 \\
+\bottomrule
+\end{tabular}

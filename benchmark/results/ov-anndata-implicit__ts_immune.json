@@ -1,0 +1,39 @@
+{
+  "config": "ov-anndata-implicit",
+  "input": "data/ts_immune.h5ad",
+  "input_mb": 18858.0,
+  "total_seconds": 1614.3061,
+  "stages": {
+    "load": {
+      "seconds": 307.7804,
+      "rss_mb_before": 458.2,
+      "rss_mb_after": 72608.5,
+      "rss_mb_delta": 72150.3
+    },
+    "qc": {
+      "seconds": 344.6989,
+      "rss_mb_before": 55011.2,
+      "rss_mb_after": 54939.0,
+      "rss_mb_delta": -72.2
+    },
+    "preprocess": {
+      "seconds": 720.6652,
+      "rss_mb_before": 54939.0,
+      "rss_mb_after": 66588.0,
+      "rss_mb_delta": 11649.0
+    },
+    "scale": {
+      "seconds": 83.2759,
+      "rss_mb_before": 66588.0,
+      "rss_mb_after": 78311.2,
+      "rss_mb_delta": 11723.2
+    },
+    "pca": {
+      "seconds": 141.1253,
+      "rss_mb_before": 78311.2,
+      "rss_mb_after": 78933.8,
+      "rss_mb_delta": 622.6
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

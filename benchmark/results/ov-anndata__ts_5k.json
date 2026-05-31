@@ -1,0 +1,39 @@
+{
+  "config": "ov-anndata",
+  "input": "data/ts_5k.h5ad",
+  "input_mb": 130.1,
+  "total_seconds": 34.8619,
+  "stages": {
+    "load": {
+      "seconds": 1.6307,
+      "rss_mb_before": 458.2,
+      "rss_mb_after": 856.7,
+      "rss_mb_delta": 398.5
+    },
+    "qc": {
+      "seconds": 5.2855,
+      "rss_mb_before": 865.6,
+      "rss_mb_after": 1009.0,
+      "rss_mb_delta": 143.5
+    },
+    "preprocess": {
+      "seconds": 7.3486,
+      "rss_mb_before": 1009.0,
+      "rss_mb_after": 1299.6,
+      "rss_mb_delta": 290.6
+    },
+    "scale": {
+      "seconds": 2.3941,
+      "rss_mb_before": 1299.6,
+      "rss_mb_after": 2696.9,
+      "rss_mb_delta": 1397.3
+    },
+    "pca": {
+      "seconds": 13.8712,
+      "rss_mb_before": 2696.9,
+      "rss_mb_after": 2701.2,
+      "rss_mb_delta": 4.2
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

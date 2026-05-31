@@ -1,0 +1,39 @@
+{
+  "config": "ov-anndata-implicit",
+  "input": "data/ts_vasculature.h5ad",
+  "input_mb": 2081.8,
+  "total_seconds": 175.8294,
+  "stages": {
+    "load": {
+      "seconds": 34.9922,
+      "rss_mb_before": 458.3,
+      "rss_mb_after": 8500.8,
+      "rss_mb_delta": 8042.6
+    },
+    "qc": {
+      "seconds": 33.6999,
+      "rss_mb_before": 6560.7,
+      "rss_mb_after": 6689.1,
+      "rss_mb_delta": 128.4
+    },
+    "preprocess": {
+      "seconds": 62.1307,
+      "rss_mb_before": 6689.1,
+      "rss_mb_after": 8055.6,
+      "rss_mb_delta": 1366.4
+    },
+    "scale": {
+      "seconds": 6.1389,
+      "rss_mb_before": 8055.6,
+      "rss_mb_after": 9354.2,
+      "rss_mb_delta": 1298.6
+    },
+    "pca": {
+      "seconds": 33.5291,
+      "rss_mb_before": 9354.2,
+      "rss_mb_after": 9467.8,
+      "rss_mb_delta": 113.6
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "config": "ov-oom",
+  "input": "data/ts_immune.h5ad",
+  "input_mb": 18858.0,
+  "total_seconds": 1653.4597,
+  "stages": {
+    "load": {
+      "seconds": 12.1113,
+      "rss_mb_before": 104.0,
+      "rss_mb_after": 2711.0,
+      "rss_mb_delta": 2607.1
+    },
+    "qc": {
+      "seconds": 355.825,
+      "rss_mb_before": 2720.6,
+      "rss_mb_after": 2986.2,
+      "rss_mb_delta": 265.6
+    },
+    "preprocess": {
+      "seconds": 801.8469,
+      "rss_mb_before": 2986.2,
+      "rss_mb_after": 2984.0,
+      "rss_mb_delta": -2.2
+    },
+    "scale": {
+      "seconds": 85.5113,
+      "rss_mb_before": 2984.0,
+      "rss_mb_after": 2985.0,
+      "rss_mb_delta": 1.1
+    },
+    "pca": {
+      "seconds": 393.7628,
+      "rss_mb_before": 2985.0,
+      "rss_mb_after": 3487.7,
+      "rss_mb_delta": 502.7
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

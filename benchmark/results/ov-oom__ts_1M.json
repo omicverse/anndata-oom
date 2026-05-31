@@ -1,0 +1,39 @@
+{
+  "config": "ov-oom",
+  "input": "data/ts_1M.h5ad",
+  "input_mb": 15439.3,
+  "total_seconds": 2993.8633,
+  "stages": {
+    "load": {
+      "seconds": 26.5474,
+      "rss_mb_before": 103.9,
+      "rss_mb_after": 3906.0,
+      "rss_mb_delta": 3802.0
+    },
+    "qc": {
+      "seconds": 618.5596,
+      "rss_mb_before": 3928.8,
+      "rss_mb_after": 4578.6,
+      "rss_mb_delta": 649.8
+    },
+    "preprocess": {
+      "seconds": 1506.3366,
+      "rss_mb_before": 4578.6,
+      "rss_mb_after": 4581.5,
+      "rss_mb_delta": 2.9
+    },
+    "scale": {
+      "seconds": 176.5538,
+      "rss_mb_before": 4581.5,
+      "rss_mb_after": 4581.6,
+      "rss_mb_delta": 0.1
+    },
+    "pca": {
+      "seconds": 658.8966,
+      "rss_mb_before": 4581.6,
+      "rss_mb_after": 5061.1,
+      "rss_mb_delta": 479.5
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}
