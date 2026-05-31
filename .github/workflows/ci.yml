@@ -1,0 +1,81 @@
+# Cross-platform test CI for anndataoom.
+#
+# release.yml only *builds* wheels; this workflow additionally *runs the
+# test suite* on Linux / macOS / Windows across supported Python versions,
+# so we know which platforms anndataoom actually works on (not just builds
+# on). The Rust extension is compiled from source via the maturin PEP-517
+# backend (`pip install .`), which needs a Rust toolchain + HDF5.
+#
+# fail-fast: false so one platform failing still reports the others — the
+# matrix result *is* the platform-support answer. Windows historically
+# fails at the hdf5-metno-src CMake step (see release.yml); this workflow
+# attempts a vcpkg-provided HDF5 to give it a fair chance and records the
+# outcome either way.
+
+name: CI
+
+on:
+  push:
+    branches: [main, "chore/**", "feat/**", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-13, windows-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # ── HDF5 for the pyanndata / hdf5-metno-src build ──────────────────
+      - name: Install HDF5 (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libhdf5-dev
+
+      - name: Install HDF5 (macOS)
+        if: runner.os == 'macOS'
+        run: brew install hdf5
+
+      - name: Install HDF5 (Windows, vcpkg)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          vcpkg install hdf5:x64-windows-static
+          echo "HDF5_DIR=$VCPKG_INSTALLATION_ROOT/installed/x64-windows-static" >> "$GITHUB_ENV"
+          echo "HDF5_STATIC=1" >> "$GITHUB_ENV"
+
+      - name: Build + install anndataoom (PEP-517, compiles Rust ext)
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Install test dependencies
+        run: pip install pytest scanpy scikit-learn
+
+      - name: Show environment
+        run: |
+          python -c "import anndataoom as o; print('anndataoom', o.__version__, o.__file__)"
+          python -c "import sys; print('python', sys.version)"
+
+      - name: Run test suite
+        run: pytest -v tests/
