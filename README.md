@@ -92,14 +92,14 @@ source and runs the full test suite on each cell):
 | Linux x86_64            | 3.10, 3.12  | ✅ tested + wheels |
 | macOS arm64 (Apple Si)  | 3.10, 3.12  | ✅ tested + wheels |
 | macOS x86_64 (Intel)    | 3.10, 3.12  | ✅ tested + wheels |
-| Windows x86_64          | 3.10, 3.12  | ❌ not yet — see below |
+| Windows x86_64          | 3.10, 3.12  | ✅ tested + wheels (since 0.1.8) |
 
-> **Windows is not supported yet.** The Rust extension pulls in
-> `hdf5-metno-src`, whose build script compiles a *vendored* copy of HDF5
-> via CMake; that build fails on the Windows runner even with a system
-> HDF5 present (the dependency forces the vendored path). Tracked for a
-> future release via a pre-built HDF5 + `HDF5_DIR` redirect. Linux aarch64
-> wheels are likewise pending (the `ring` crate fails to cross-compile).
+> **Windows support landed in 0.1.8.** anndata-rs is now vendored in-tree
+> (`vendor/anndata-rs/`) and its `anndata-hdf5` gates the HDF5 `threadsafe`
+> feature off on Windows — HDF5's CMake refuses thread-safety with a *static*
+> library there, which previously broke the build. The vendored static HDF5
+> now compiles and the full test suite passes on Windows in CI. Linux aarch64
+> wheels are still pending (the `ring` crate fails to cross-compile).
 
 **Wheels bundle a statically-linked HDF5** — on the supported platforms no
 system dependencies are needed and no Rust toolchain is required.
