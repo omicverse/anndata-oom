@@ -49,3 +49,4 @@ tutorials/data/
 
 # Benchmark PCA output arrays (large, regenerable by bench.py)
 benchmark/results/*.pca.npy
+.ipynb_checkpoints/

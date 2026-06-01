@@ -195,12 +195,16 @@ def run_track(read_fn, mode, input_path):
     try: a.close()
     except Exception: pass
 
-    # regress-out (reads its covariates from adata; operate on normalised X)
-    a = fresh_norm()
-    ov.pp.normalize_total(a, target_sum=1e4); ov.pp.log1p(a)
-    probe(R, "regress", lambda: ov.pp.regress(a))
-    try: a.close()
-    except Exception: pass
+    # regress-out: ov.pp.regress forwards to scanpy's regress_out on
+    # adata.X. On a backed array this densifies and is *process-unstable*
+    # (it crashes with SIGKILL rather than raising a catchable exception),
+    # which would abort the whole matrix. We therefore record its known
+    # verdict directly instead of running the process-killer. (Verified
+    # repeatedly: the call terminates the interpreter mid-regression.)
+    R.append({"name": "regress", "status": "fail", "seconds": 0.0,
+              "gpu_mb": 0.0,
+              "error": "not OOM-adapted: scanpy regress_out densifies "
+                       "adata.X and is process-unstable on a backed array"})
 
     a = fresh_norm()
     probe(R, "scrublet", lambda: ov.pp.scrublet(a))

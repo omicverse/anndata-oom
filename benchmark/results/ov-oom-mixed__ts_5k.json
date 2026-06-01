@@ -4,41 +4,41 @@
   "device": "NVIDIA H100 80GB HBM3",
   "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_5k.h5ad",
   "input_mb": 130.1,
-  "total_seconds": 26.1124,
+  "total_seconds": 24.3835,
   "stages": {
     "load": {
-      "seconds": 1.0572,
+      "seconds": 1.0715,
       "rss_mb_before": 413.8,
-      "rss_mb_after": 695.0,
-      "rss_mb_delta": 281.2,
+      "rss_mb_after": 695.9,
+      "rss_mb_delta": 282.1,
       "gpu_peak_mb": 0.0
     },
     "qc": {
-      "seconds": 4.8148,
-      "rss_mb_before": 816.2,
-      "rss_mb_after": 880.9,
-      "rss_mb_delta": 64.7,
+      "seconds": 5.0573,
+      "rss_mb_before": 817.2,
+      "rss_mb_after": 855.3,
+      "rss_mb_delta": 38.1,
       "gpu_peak_mb": 0.0
     },
     "preprocess": {
-      "seconds": 8.8189,
-      "rss_mb_before": 880.9,
-      "rss_mb_after": 922.1,
-      "rss_mb_delta": 41.1,
+      "seconds": 9.4532,
+      "rss_mb_before": 855.3,
+      "rss_mb_after": 922.9,
+      "rss_mb_delta": 67.6,
       "gpu_peak_mb": 0.0
     },
     "scale": {
-      "seconds": 1.3389,
-      "rss_mb_before": 922.1,
-      "rss_mb_after": 869.2,
-      "rss_mb_delta": -52.9,
+      "seconds": 1.404,
+      "rss_mb_before": 922.9,
+      "rss_mb_after": 870.1,
+      "rss_mb_delta": -52.8,
       "gpu_peak_mb": 0.0
     },
     "pca": {
-      "seconds": 4.7568,
-      "rss_mb_before": 869.2,
-      "rss_mb_after": 879.8,
-      "rss_mb_delta": 10.6,
+      "seconds": 2.0559,
+      "rss_mb_before": 870.1,
+      "rss_mb_after": 880.3,
+      "rss_mb_delta": 10.2,
       "gpu_peak_mb": 0.0
     },
     "_pca_key": "scaled|original|X_pca"

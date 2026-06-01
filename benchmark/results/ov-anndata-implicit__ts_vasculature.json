@@ -1,38 +1,45 @@
 {
   "config": "ov-anndata-implicit",
-  "input": "data/ts_vasculature.h5ad",
+  "mode": "cpu",
+  "device": "cpu",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_vasculature.h5ad",
   "input_mb": 2081.8,
-  "total_seconds": 175.8294,
+  "total_seconds": 151.2181,
   "stages": {
     "load": {
-      "seconds": 34.9922,
-      "rss_mb_before": 458.3,
-      "rss_mb_after": 8500.8,
-      "rss_mb_delta": 8042.6
+      "seconds": 35.5278,
+      "rss_mb_before": 476.2,
+      "rss_mb_after": 8521.5,
+      "rss_mb_delta": 8045.3,
+      "gpu_peak_mb": 0.0
     },
     "qc": {
-      "seconds": 33.6999,
-      "rss_mb_before": 6560.7,
-      "rss_mb_after": 6689.1,
-      "rss_mb_delta": 128.4
+      "seconds": 38.9263,
+      "rss_mb_before": 6654.2,
+      "rss_mb_after": 6691.6,
+      "rss_mb_delta": 37.3,
+      "gpu_peak_mb": 0.0
     },
     "preprocess": {
-      "seconds": 62.1307,
-      "rss_mb_before": 6689.1,
-      "rss_mb_after": 8055.6,
-      "rss_mb_delta": 1366.4
+      "seconds": 59.3776,
+      "rss_mb_before": 6691.6,
+      "rss_mb_after": 7992.6,
+      "rss_mb_delta": 1301.0,
+      "gpu_peak_mb": 0.0
     },
     "scale": {
-      "seconds": 6.1389,
-      "rss_mb_before": 8055.6,
-      "rss_mb_after": 9354.2,
-      "rss_mb_delta": 1298.6
+      "seconds": 7.6898,
+      "rss_mb_before": 7992.6,
+      "rss_mb_after": 9291.3,
+      "rss_mb_delta": 1298.7,
+      "gpu_peak_mb": 0.0
     },
     "pca": {
-      "seconds": 33.5291,
-      "rss_mb_before": 9354.2,
-      "rss_mb_after": 9467.8,
-      "rss_mb_delta": 113.6
+      "seconds": 3.6645,
+      "rss_mb_before": 9291.3,
+      "rss_mb_after": 9404.1,
+      "rss_mb_delta": 112.8,
+      "gpu_peak_mb": 0.0
     },
     "_pca_key": "scaled|original|X_pca"
   }
