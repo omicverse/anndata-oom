@@ -1,6 +1,6 @@
 [package]
 name = "anndataoom"
-version = "0.1.4"
+version = "0.1.8"
 edition = "2024"
 rust-version = "1.88"
 authors = ["omicverse contributors"]
@@ -16,15 +16,16 @@ crate-type = ["cdylib"]
 [features]
 extension-module = ["pyo3/extension-module", "pyanndata/extension-module"]
 
-# We pin to a specific commit of scverse/anndata-rs for reproducible builds.
-# This is the same commit that snapatac2 currently uses.
 [dependencies]
-# Starlitnightly/anndata-rs fork, pinned to a commit that fixes the
-# `to_select_info` panic on non-tuple single-axis subscripts — necessary
-# for fast `PyArrayElem[a:b]` slice reads used by anndataoom's
-# run-grouped subset path. Swap back to the upstream scverse rev once
-# the patch is merged there.
-pyanndata = { git = "https://github.com/Starlitnightly/anndata-rs", branch = "main" }
+# Vendored copy of the Starlitnightly/anndata-rs fork (rev aa15c8d), now
+# maintained in-tree under vendor/anndata-rs/ instead of pulled as a git
+# dependency. The fork carries the `to_select_info` fix for non-tuple
+# single-axis subscripts (fast `PyArrayElem[a:b]` slice reads used by
+# anndataoom's run-grouped subset path). Vendoring also lets us gate the
+# HDF5 `threadsafe` feature off on Windows (see
+# vendor/anndata-rs/anndata-hdf5/Cargo.toml) so the vendored static HDF5
+# build succeeds there.
+pyanndata = { path = "vendor/anndata-rs/pyanndata" }
 pyo3-log = "0.13"
 
 [dependencies.pyo3]

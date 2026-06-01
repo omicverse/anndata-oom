@@ -47,24 +47,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # ── HDF5 for the pyanndata / hdf5-metno-src build ──────────────────
-      - name: Install HDF5 (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libhdf5-dev
+      # No system HDF5 needed: the vendored anndata-rs builds a static HDF5
+      # from source via the `hdf5-metno-sys` `static` feature (CMake, which
+      # all runners ship). On Windows the `threadsafe` feature is gated off
+      # (vendor/anndata-rs/anndata-hdf5/Cargo.toml) so the static HDF5 CMake
+      # build succeeds. CMake is preinstalled on the GitHub-hosted runners.
 
-      - name: Install HDF5 (macOS)
-        if: runner.os == 'macOS'
-        run: brew install hdf5
-
-      - name: Install HDF5 (Windows, vcpkg)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          vcpkg install hdf5:x64-windows-static
-          echo "HDF5_DIR=$VCPKG_INSTALLATION_ROOT/installed/x64-windows-static" >> "$GITHUB_ENV"
-          echo "HDF5_STATIC=1" >> "$GITHUB_ENV"
-
-      - name: Build + install anndataoom (PEP-517, compiles Rust ext)
+      - name: Build + install anndataoom (PEP-517, compiles Rust ext + vendored HDF5)
         run: |
           python -m pip install --upgrade pip
           pip install .

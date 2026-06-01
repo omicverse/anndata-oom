@@ -1,0 +1,37 @@
+[package]
+name = "pyanndata"
+version = "0.7.0"
+edition = "2024"
+rust-version = "1.88"
+authors = ["Kai Zhang <kai@kzhang.org>"]
+description = "Rust APIs"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/kaizhang/anndata-rs"
+homepage = "https://github.com/kaizhang/anndata-rs"
+keywords = ["data"]
+
+[dependencies]
+anndata = { workspace = true }
+anndata-hdf5 = { workspace = true }
+anyhow = "1.0"
+downcast-rs = "2"
+numpy = "0.27"
+ndarray = "0.17"
+nalgebra-sparse = "0.11"
+hdf5 = { package = "hdf5-metno", version = "0.12" }
+polars = { version = "0.53", features = ["ndarray"] }
+pyo3-polars = {version = "0.26", features = ["dtype-full", "dtype-struct"] }
+rand = "0.9"
+flate2 = "1.0"
+rayon = "1.11"
+
+[dependencies.pyo3]
+version = "0.27"
+features = ["multiple-pymethods", "anyhow"]
+
+[features]
+extension-module = ["pyo3/extension-module"]
+
+[lib]
+crate-type = ["lib"]
