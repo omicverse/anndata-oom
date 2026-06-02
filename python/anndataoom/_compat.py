@@ -38,6 +38,7 @@ def oom_guard(
     materialize: bool = True,
     result_keys_uns: Sequence[str] | None = None,
     result_keys_obs: Sequence[str] | None = None,
+    result_keys_var: Sequence[str] | None = None,
     result_keys_obsm: Sequence[str] | None = None,
     result_keys_obsp: Sequence[str] | None = None,
     suggest: str | None = None,
@@ -94,6 +95,7 @@ def oom_guard(
             # Snapshot existing keys to detect new ones
             old_uns = set(adata.uns.keys())
             old_obs_cols = set(adata.obs.columns)
+            old_var_cols = set(adata.var.columns)
             old_obsm = set(adata.obsm.keys())
             old_obsp = set(adata.obsp.keys())
 
@@ -110,6 +112,7 @@ def oom_guard(
             # Copy results back
             _copy_back_uns(adata, adata_mem, result_keys_uns, old_uns)
             _copy_back_obs(adata, adata_mem, result_keys_obs, old_obs_cols)
+            _copy_back_var(adata, adata_mem, result_keys_var, old_var_cols)
             _copy_back_mapping(adata.obsm, adata_mem.obsm, result_keys_obsm, old_obsm)
             _copy_back_mapping(adata.obsp, adata_mem.obsp, result_keys_obsp, old_obsp)
 
@@ -147,6 +150,22 @@ def _copy_back_obs(oom, mem, keys, old_cols):
         for col in keys:
             if col in mem.obs.columns:
                 oom.obs[col] = mem.obs[col].values
+
+
+def _copy_back_var(oom, mem, keys, old_cols):
+    if keys is None:
+        return
+    # Materialised var may be a gene subset (e.g. after HVG/filtering); align
+    # back onto the OOM object's var index, leaving non-shared genes as NA.
+    import pandas as pd
+    cols = ([c for c in mem.var.columns if c not in old_cols]
+            if keys == ["*"] else [c for c in keys if c in mem.var.columns])
+    for col in cols:
+        s = mem.var[col]
+        if mem.var.index.equals(oom.var.index):
+            oom.var[col] = s.values
+        else:
+            oom.var[col] = s.reindex(oom.var.index).values
 
 
 def _copy_back_mapping(oom_dict, mem_dict, keys, old_keys):

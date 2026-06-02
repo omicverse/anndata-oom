@@ -546,19 +546,22 @@ def table_compat():
     lines = ["\\begin{tabular}{lcccr}", "\\toprule",
              "\\texttt{ov.pp} function & cpu & mixed & GPU-offload & "
              "note \\\\", "\\midrule"]
+    # Chunked-native functions carry no note; the eight made compatible via
+    # the materialise-and-run oom_guard are flagged "materialise"; the
+    # remaining gaps state why.
     notes = {
         "mde": "torch (GPU-capable)",
         "sude": "fails in mixed (NaN)",
-        "highly_variable_genes": "standalone; use \\texttt{preprocess}",
-        "highly_variable_features": "pegasus HVF densifies",
-        "normalize_pearson_residuals": "not OOM-adapted",
-        "regress": "scanpy regress\\_out densifies",
-        "scrublet": "backed var lookup",
-        "score_genes_cell_cycle": "backed var lookup",
-        "filter_cells": "not OOM-adapted",
-        "filter_genes": "not OOM-adapted",
-        "anndata_to_GPU": "needs rapids",
-        "anndata_to_CPU": "needs rapids",
+        "highly_variable_genes": "materialise",
+        "highly_variable_features": "materialise",
+        "normalize_pearson_residuals": "materialise",
+        "regress": "materialise",
+        "scrublet": "materialise",
+        "score_genes_cell_cycle": "materialise",
+        "filter_cells": "materialise",
+        "filter_genes": "materialise",
+        "anndata_to_GPU": "needs rapids\\_singlecell",
+        "anndata_to_CPU": "needs rapids\\_singlecell",
     }
     bs = "\\_"
     for fn in _COMPAT_ORDER:

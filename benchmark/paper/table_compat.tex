@@ -16,15 +16,15 @@
 \texttt{normalize\_total} & \cmark & \cmark & -- &  \\
 \texttt{log1p} & \cmark & \cmark & -- &  \\
 \texttt{identify\_robust\_genes} & \cmark & \cmark & -- &  \\
-\texttt{highly\_variable\_features} & \xmark & \xmark & -- & pegasus HVF densifies \\
-\texttt{highly\_variable\_genes} & \xmark & \xmark & -- & standalone; use \texttt{preprocess} \\
-\texttt{normalize\_pearson\_residuals} & \xmark & \xmark & -- & not OOM-adapted \\
-\texttt{regress} & \xmark & \xmark & -- & scanpy regress\_out densifies \\
-\texttt{scrublet} & \xmark & \xmark & -- & backed var lookup \\
-\texttt{score\_genes\_cell\_cycle} & \xmark & \xmark & -- & backed var lookup \\
-\texttt{filter\_cells} & \xmark & \xmark & -- & not OOM-adapted \\
-\texttt{filter\_genes} & \xmark & \xmark & -- & not OOM-adapted \\
-\texttt{anndata\_to\_GPU} & \xmark & \xmark & -- & needs rapids \\
-\texttt{anndata\_to\_CPU} & \xmark & \xmark & -- & needs rapids \\
+\texttt{highly\_variable\_features} & \cmark & \cmark & -- & materialise \\
+\texttt{highly\_variable\_genes} & \cmark & \cmark & -- & materialise \\
+\texttt{normalize\_pearson\_residuals} & \cmark & \cmark & -- & materialise \\
+\texttt{regress} & \cmark & \cmark & -- & materialise \\
+\texttt{scrublet} & \cmark & \cmark & -- & materialise \\
+\texttt{score\_genes\_cell\_cycle} & \cmark & \cmark & -- & materialise \\
+\texttt{filter\_cells} & \cmark & \cmark & -- & materialise \\
+\texttt{filter\_genes} & \cmark & \cmark & -- & materialise \\
+\texttt{anndata\_to\_GPU} & \xmark & \xmark & -- & needs rapids\_singlecell \\
+\texttt{anndata\_to\_CPU} & \xmark & \xmark & -- & needs rapids\_singlecell \\
 \bottomrule
 \end{tabular}

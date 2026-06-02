@@ -190,21 +190,19 @@ def run_track(read_fn, mode, input_path):
     except Exception: pass
 
     a = fresh_norm()
+    ov.pp.identify_robust_genes(a)   # pegasus HVF prerequisite (sets var['robust'])
     probe(R, "highly_variable_features",
           lambda: ov.pp.highly_variable_features(a, n_top=2000))
     try: a.close()
     except Exception: pass
 
-    # regress-out: ov.pp.regress forwards to scanpy's regress_out on
-    # adata.X. On a backed array this densifies and is *process-unstable*
-    # (it crashes with SIGKILL rather than raising a catchable exception),
-    # which would abort the whole matrix. We therefore record its known
-    # verdict directly instead of running the process-killer. (Verified
-    # repeatedly: the call terminates the interpreter mid-regression.)
-    R.append({"name": "regress", "status": "fail", "seconds": 0.0,
-              "gpu_mb": 0.0,
-              "error": "not OOM-adapted: scanpy regress_out densifies "
-                       "adata.X and is process-unstable on a backed array"})
+    # regress-out: now @oom_guard'd in omicverse (materialise-and-run), so it
+    # is safe to call directly on an AnnDataOOM.
+    a = fresh_norm()
+    ov.pp.normalize_total(a, target_sum=1e4); ov.pp.log1p(a)
+    probe(R, "regress", lambda: ov.pp.regress(a))
+    try: a.close()
+    except Exception: pass
 
     a = fresh_norm()
     probe(R, "scrublet", lambda: ov.pp.scrublet(a))
@@ -228,10 +226,12 @@ def run_track(read_fn, mode, input_path):
 
 
 def _score_cc(ov, ad):
-    # cell-cycle scoring needs gene-symbol var_names; use a tiny gene list
-    # present-or-not, omicverse tolerates missing genes by intersection.
-    s_genes = ["MCM5", "PCNA", "TYMS"]
-    g2m = ["HMGB2", "CDK1", "NUSAP1"]
+    # Use genes that actually exist in this dataset's var_names (cellxgene
+    # uses Ensembl IDs, not symbols) so the scoring has valid genes; this
+    # tests that score_genes_cell_cycle *runs* on the OOM backend, not the
+    # biology of a specific marker set.
+    vn = list(ad.var_names)
+    s_genes, g2m = vn[:50], vn[50:100]
     ov.pp.score_genes_cell_cycle(ad, s_genes=s_genes, g2m_genes=g2m)
 
 

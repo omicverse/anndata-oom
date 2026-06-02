@@ -854,7 +854,20 @@ class AnnDataOOM:
             adata.layers[k] = self._layers[k][:]
 
         if self._raw is not None:
-            adata.raw = self._raw.to_adata() if hasattr(self._raw, "to_adata") else self._raw
+            # `.raw` is optional; a stale/unreadable backed raw handle (common
+            # after the working `.X` has been swapped to a layer, e.g. cellxgene
+            # decontXcounts) must not abort the whole materialisation. Drop it
+            # with a warning rather than crashing to_adata().
+            try:
+                adata.raw = (self._raw.to_adata()
+                             if hasattr(self._raw, "to_adata") else self._raw)
+            except Exception as exc:
+                import warnings
+                warnings.warn(
+                    f"to_adata(): could not materialise .raw "
+                    f"({type(exc).__name__}: {exc}); dropping it.",
+                    RuntimeWarning,
+                )
 
         return adata
 
