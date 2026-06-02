@@ -40,6 +40,12 @@ from ._chunked_ops import (
     chunked_pearson_residual_variance,
     chunked_highly_variable_genes_pearson,
     chunked_highly_variable_genes_dispersion,
+    chunked_highly_variable_features_pegasus,
+    PearsonResidualBackedArray,
+    chunked_normalize_pearson_residuals,
+    RegressedBackedArray,
+    chunked_regress,
+    chunked_scrublet_prepare,
     materialise_for_pca,
 )
 from ._centered_sparse import CenteredSparseArray
@@ -103,5 +109,11 @@ __all__ = [
     "chunked_pearson_residual_variance",
     "chunked_highly_variable_genes_pearson",
     "chunked_highly_variable_genes_dispersion",
+    "chunked_highly_variable_features_pegasus",
+    "PearsonResidualBackedArray",
+    "chunked_normalize_pearson_residuals",
+    "RegressedBackedArray",
+    "chunked_regress",
+    "chunked_scrublet_prepare",
     "materialise_for_pca",
 ]

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse
+from scipy.sparse import issparse, csr_matrix, vstack as sparse_vstack
 
 if TYPE_CHECKING:
     from ._core import AnnDataOOM
@@ -1325,6 +1325,410 @@ def chunked_highly_variable_genes_dispersion(
 
     logger.info("Extracted %d highly variable genes (%s dispersion, chunked)",
                 int(hv.sum()), flavor)
+
+
+def chunked_highly_variable_features_pegasus(
+    adata,
+    *,
+    n_top: int = 2000,
+    span: float = 0.02,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> None:
+    """Pegasus-flavour HVF selection, fully chunked (out-of-core).
+
+    Mirrors :func:`omicverse.pp._preprocess.select_hvf_pegasus` (batch=None)
+    bit-for-bit, but the only matrix touch is one chunked pass through
+    :func:`chunked_mean_var` for per-gene mean/var of the (already
+    log-normalised) ``adata.X``. Everything after that is O(n_vars) work on
+    small vectors: a degree-2 LOESS fit of var-vs-mean over the *robust*
+    genes, then a dual ranking by residual (var - loess) and fold-change
+    (var / loess). Peak RAM is bounded by ``chunk_size`` rows, never the
+    cell count, and ``adata.X`` is left untouched (no materialisation).
+
+    Requires ``adata.var['robust']`` (set by
+    :func:`chunked_identify_robust_genes`). Writes ``adata.var`` columns
+    ``mean``, ``var``, ``hvf_loess``, ``hvf_rank``,
+    ``highly_variable_features`` and ``highly_variable``.
+    """
+    import skmisc.loess as _sl
+
+    if "robust" not in adata.var:
+        raise ValueError(
+            "Please run identify_robust_genes (chunked_identify_robust_genes) "
+            "to identify robust genes before pegasus HVF selection.")
+
+    def _fit_loess(x, y, sp, degree):
+        try:
+            lobj = _sl.loess(x, y, span=sp, degree=degree)
+            lobj.fit()
+            return lobj
+        except ValueError:
+            return None
+
+    # One chunked pass for per-gene mean/var (ddof=1 sample variance, which
+    # matches pegasus' calc_mean_and_var); cheap O(n_vars) thereafter.
+    mean_all, var_all = chunked_mean_var(adata, chunk_size=chunk_size)
+    adata.var["mean"] = mean_all
+    adata.var["var"] = var_all
+
+    robust_idx = adata.var["robust"].values
+    hvf_index = np.zeros(int(robust_idx.sum()), dtype=bool)
+    mean = mean_all[robust_idx]
+    var = var_all[robust_idx]
+
+    span_value = span
+    while True:
+        lobj = _fit_loess(mean, var, span_value, degree=2)
+        if lobj is not None:
+            break
+        span_value += 0.01
+    if span_value > span:
+        logger.info(
+            "Loess span adjusted from %.2f to %.2f to avoid fitting errors.",
+            span, span_value)
+
+    rank1 = np.zeros(hvf_index.size, dtype=int)
+    rank2 = np.zeros(hvf_index.size, dtype=int)
+    fitted = lobj.outputs.fitted_values
+    delta = var - fitted
+    fc = var / fitted
+    rank1[np.argsort(delta)[::-1]] = range(hvf_index.size)
+    rank2[np.argsort(fc)[::-1]] = range(hvf_index.size)
+    hvf_rank = rank1 + rank2
+    hvf_index[np.argsort(hvf_rank)[:n_top]] = True
+
+    adata.var["hvf_loess"] = 0.0
+    adata.var.loc[robust_idx, "hvf_loess"] = fitted
+    adata.var["hvf_rank"] = -1
+    adata.var.loc[robust_idx, "hvf_rank"] = hvf_rank
+    adata.var["highly_variable_features"] = False
+    adata.var.loc[robust_idx, "highly_variable_features"] = hvf_index
+    # scanpy/omicverse downstream (pca, scale) keys on 'highly_variable'
+    adata.var["highly_variable"] = adata.var["highly_variable_features"]
+
+    logger.info("Selected %d highly variable features (pegasus, chunked)",
+                int(hvf_index.sum()))
+
+
+# ======================================================================
+# Lazy Pearson-residual matrix  (Lause 2021 analytic residuals)
+# ======================================================================
+
+
+class PearsonResidualBackedArray(TransformedBackedArray):
+    """Lazy analytic Pearson residuals over a backed count matrix.
+
+    Computes, on read, the Lause-2021 residuals::
+
+        mu_ij  = sums_cells[i] * sums_genes[j] / sum_total
+        r_ij   = (x_ij - mu_ij) / sqrt(mu_ij + mu_ij**2 / theta)
+        r_ij   = clip(r_ij, -clip, +clip)
+
+    Like :class:`ScaledBackedArray`, it stores only small parameter
+    vectors -- ``sums_cells`` (n_obs,), ``sums_genes`` (n_vars,),
+    plus the scalars ``sum_total``, ``theta`` and ``clip`` -- and never
+    materialises the full residual matrix.  Output chunks are **dense**
+    ``float32`` (Pearson residuals are dense because ``mu_ij`` is a full
+    rank-1 outer product), so peak memory is bounded by
+    ``chunk_size * n_vars``, not by the cell count.
+
+    Genes with zero total count give ``mu_ij == 0`` and hence a zero
+    denominator; scanpy leaves ``NaN`` there, but we clamp the denom to
+    1.0 and emit a finite ``0.0`` residual so downstream chunked passes
+    (mean/var, PCA) stay finite.  In the standard pipeline such genes are
+    dropped by robust-gene filtering before this runs.
+    """
+
+    def __init__(
+        self,
+        parent: BackedArray,
+        sums_cells: np.ndarray,
+        sums_genes: np.ndarray,
+        sum_total: float,
+        *,
+        theta: float = 100.0,
+        clip: float | None = None,
+    ):
+        super().__init__(parent, norm_factors=None, apply_log1p=False)
+        self._sums_cells = np.asarray(sums_cells, dtype=np.float64)
+        self._sums_genes = np.asarray(sums_genes, dtype=np.float64)
+        self._sum_total = float(sum_total)
+        self._theta = float(theta)
+        n_obs = parent.shape[0]
+        self._clip = (
+            float(clip) if clip is not None else float(np.sqrt(n_obs))
+        )
+
+    def _residuals_dense(self, data, global_start: int):
+        if issparse(data):
+            data = data.toarray()
+        data = np.asarray(data, dtype=np.float64)
+        n = data.shape[0]
+        cell_sums = self._sums_cells[global_start:global_start + n]
+        # mu_ij = sums_cells[i] * sums_genes[j] / sum_total
+        mu = np.outer(cell_sums, self._sums_genes) / self._sum_total
+        denom = np.sqrt(mu + mu * mu / self._theta)
+        denom[denom == 0] = 1.0
+        res = (data - mu) / denom
+        np.clip(res, -self._clip, self._clip, out=res)
+        return res.astype(np.float32)
+
+    def _residuals_indices(self, data, indices):
+        if issparse(data):
+            data = data.toarray()
+        data = np.asarray(data, dtype=np.float64)
+        cell_sums = self._sums_cells[np.asarray(indices)]
+        mu = np.outer(cell_sums, self._sums_genes) / self._sum_total
+        denom = np.sqrt(mu + mu * mu / self._theta)
+        denom[denom == 0] = 1.0
+        res = (data - mu) / denom
+        np.clip(res, -self._clip, self._clip, out=res)
+        return res.astype(np.float32)
+
+    def _transform_chunk(self, data, global_start: int):
+        return self._residuals_dense(data, global_start)
+
+    def _read_rows(self, start: int, end: int):
+        end = min(end, self._shape[0])
+        if start >= end:
+            return np.empty((0, self._shape[1]), dtype=np.float32)
+        raw = self._parent._read_rows(start, end)
+        return self._residuals_dense(raw, start)
+
+    def _read_row_indices(self, indices):
+        indices = np.asarray(indices)
+        raw = self._parent._read_row_indices(indices)
+        return self._residuals_indices(raw, indices)
+
+    def chunked(self, chunk_size: int = DEFAULT_CHUNK_SIZE):
+        for start, end, raw in self._parent.chunked(chunk_size):
+            yield start, end, self._residuals_dense(raw, start)
+
+    @property
+    def dtype(self) -> np.dtype:
+        return np.dtype(np.float32)
+
+
+def chunked_normalize_pearson_residuals(
+    adata: AnnDataOOM,
+    *,
+    theta: float = 100.0,
+    clip: float | None = None,
+    layer: str | None = None,
+    inplace: bool = True,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> PearsonResidualBackedArray:
+    """Out-of-core analytic Pearson-residual normalisation (Lause 2021).
+
+    Performs a single chunked pass to accumulate per-cell and per-gene
+    count sums, then wraps the source matrix in a
+    :class:`PearsonResidualBackedArray` that computes residuals lazily on
+    read.  Peak memory is bounded by ``chunk_size * n_vars`` -- the full
+    residual matrix is never materialised.
+
+    The lazy array is assigned to ``adata.X`` (or, when ``layer`` is
+    given, written back to ``adata.layers[layer]``) and also returned.
+    """
+    if layer is not None and layer in adata.layers:
+        X = adata.layers[layer]
+    else:
+        X = adata.X
+
+    n_obs, n_vars = X.shape
+    sums_genes = np.zeros(n_vars, dtype=np.float64)
+    sums_cells = np.zeros(n_obs, dtype=np.float64)
+    for start, end, chunk in X.chunked(chunk_size):
+        if issparse(chunk):
+            sums_cells[start:end] = np.asarray(chunk.sum(axis=1)).ravel()
+            sums_genes += np.asarray(chunk.sum(axis=0)).ravel()
+        else:
+            c = np.asarray(chunk, dtype=np.float64)
+            sums_cells[start:end] = c.sum(axis=1)
+            sums_genes += c.sum(axis=0)
+    sum_total = sums_genes.sum()
+
+    lazy = PearsonResidualBackedArray(
+        X, sums_cells, sums_genes, sum_total, theta=theta, clip=clip,
+    )
+    if inplace:
+        if layer is not None and layer in adata.layers:
+            adata.layers[layer] = lazy
+        else:
+            adata.X = lazy
+    return lazy
+
+
+# ======================================================================
+# Lazy covariate regress-out
+# ======================================================================
+
+
+class RegressedBackedArray(TransformedBackedArray):
+    """Lazy covariate regress-out: ``x_ij - C_i . beta_j``.
+
+    Stores only the per-gene OLS coefficients ``betas`` (shape
+    ``(k, n_vars)``) and the per-cell design matrix ``covariates``
+    (shape ``(n_obs, k)``, ``k`` tiny). The affine residual is applied
+    per chunk at read time, so the full residualised matrix is never
+    materialised.
+    """
+
+    def __init__(self, parent, betas, covariates, *, norm_factors=None,
+                 apply_log1p=False):
+        super().__init__(parent, norm_factors=norm_factors,
+                         apply_log1p=apply_log1p)
+        self._betas = np.ascontiguousarray(betas, dtype=np.float64)
+        self._covariates = np.ascontiguousarray(covariates, dtype=np.float64)
+
+    def _transform_chunk(self, data, global_start):
+        data = super()._transform_chunk(data, global_start)
+        if issparse(data):
+            data = data.toarray()
+        data = np.asarray(data, dtype=np.float64)
+        n = data.shape[0]
+        C = self._covariates[global_start:global_start + n]
+        data = data - C @ self._betas
+        return data.astype(np.float32)
+
+
+def chunked_regress(adata, keys=("mito_perc", "nUMIs"), *,
+                    chunk_size=DEFAULT_CHUNK_SIZE):
+    """Regress per-cell covariates out of every gene, fully out-of-core.
+
+    Mirrors scanpy.pp.regress_out: design C = [ones, obs[keys[0]], ...]
+    (intercept first); per-gene OLS beta_j = (C^T C)^-1 C^T x_j. Both
+    C^T C (k x k) and C^T X (k x n_vars) accumulate in ONE chunked pass,
+    so peak memory is bounded by chunk_size. Residual x_ij - C_i.beta_j
+    is applied lazily by a RegressedBackedArray stored in
+    adata.layers['regressed']. Returns the (k, n_vars) coefficients.
+    """
+    X = adata.X
+    n_obs, n_vars = X.shape
+    keys = list(keys)
+    C = np.empty((n_obs, len(keys) + 1), dtype=np.float64)
+    C[:, 0] = 1.0
+    for j, k in enumerate(keys):
+        C[:, j + 1] = np.asarray(adata.obs[k], dtype=np.float64)
+    CtC = C.T @ C
+    CtX = np.zeros((C.shape[1], n_vars), dtype=np.float64)
+    for start, end, chunk in X.chunked(chunk_size):
+        Cb = C[start:end]
+        if issparse(chunk):
+            CtX += np.asarray(Cb.T @ chunk)
+        else:
+            CtX += Cb.T @ np.asarray(chunk, dtype=np.float64)
+    betas = np.linalg.lstsq(CtC, CtX, rcond=None)[0]
+    if isinstance(X, TransformedBackedArray):
+        reg = RegressedBackedArray(
+            X._parent, betas, C,
+            norm_factors=X._norm_factors, apply_log1p=X._apply_log1p)
+    else:
+        reg = RegressedBackedArray(X, betas, C)
+    adata.layers["regressed"] = reg
+    return betas
+
+
+def chunked_scrublet_prepare(
+    adata,
+    *,
+    min_cells: int = 3,
+    min_genes: int = 3,
+    n_top_genes: int | None = None,
+    flavor: str = "seurat",
+    min_disp: float = 0.5,
+    max_disp: float = np.inf,
+    min_mean: float = 0.0125,
+    max_mean: float = 3.0,
+    n_bins: int = 20,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+):
+    """Bounded-memory preparation for out-of-core Scrublet doublet detection.
+
+    Scrublet's doublet simulation (random cell-pair addition) and KNN
+    classifier fundamentally need an in-memory matrix, so it cannot run
+    *fully* out-of-core. However, scrublet operates only on the
+    highly-variable-gene subset of **raw counts** -- so the in-RAM footprint
+    is bounded by ``n_obs x n_HVG`` (a few thousand genes), never the full
+    gene count. This helper does all the full-matrix work in chunks and
+    materialises only that bounded subset.
+
+    Returns ``(ad_obs, hvg_mask, n_hvg)`` where ``ad_obs`` is an in-memory
+    CSR AnnData of raw counts restricted to selected HVGs and surviving
+    cells, ``hvg_mask`` is the boolean ``(n_vars,)`` selection in original
+    var space, and ``n_hvg`` is the gene count.
+    """
+    from anndata import AnnData as _AnnData
+
+    X = adata.X
+    n_obs, n_vars = X.shape
+
+    # --- 1. gene / cell filtering: single chunked pass, vectors only ---
+    n_cells_per_gene = np.zeros(n_vars, dtype=np.int64)
+    n_genes_per_cell = np.zeros(n_obs, dtype=np.int64)
+    for start, end, chunk in X.chunked(chunk_size):
+        if issparse(chunk):
+            n_cells_per_gene += chunk.getnnz(axis=0)
+            n_genes_per_cell[start:end] = chunk.getnnz(axis=1)
+        else:
+            arr = np.asarray(chunk)
+            n_cells_per_gene += (arr != 0).sum(axis=0)
+            n_genes_per_cell[start:end] = (arr != 0).sum(axis=1)
+    gene_pass = n_cells_per_gene >= min_cells
+    cell_pass = n_genes_per_cell >= min_genes
+
+    # --- 2. HVG selection on lazy normalize_total + log1p (X stays tiny) ---
+    X_orig = adata.X
+    var_backup = adata.var.copy()
+    try:
+        chunked_normalize_total(adata, chunk_size=chunk_size)
+        chunked_log1p(adata)
+        chunked_highly_variable_genes_dispersion(
+            adata, flavor=flavor, n_top_genes=n_top_genes, n_bins=n_bins,
+            min_mean=min_mean, max_mean=max_mean, min_disp=min_disp,
+            max_disp=max_disp, chunk_size=chunk_size,
+        )
+        hv = np.asarray(adata.var["highly_variable"].values, dtype=bool)
+    finally:
+        # Restore raw X + var so the caller's adata is left pristine.
+        adata.X = X_orig
+        adata.var = var_backup
+        try:
+            adata.layers.pop("counts", None)
+        except Exception:
+            pass
+
+    hvg_mask = gene_pass & hv
+    sel = np.where(hvg_mask)[0]
+    n_hvg = int(sel.size)
+    cell_idx = np.where(cell_pass)[0]
+
+    # --- 3. ONE chunked pass: materialise raw counts, selected cols+rows ---
+    blocks = []
+    for start, end, chunk in X.chunked(chunk_size):
+        if issparse(chunk):
+            sub = chunk[:, sel].tocsr()
+        else:
+            sub = csr_matrix(np.asarray(chunk)[:, sel])
+        local = cell_idx[(cell_idx >= start) & (cell_idx < end)] - start
+        blocks.append(sub[local])
+    if blocks:
+        Xsub = sparse_vstack(blocks, format="csr")
+    else:
+        Xsub = csr_matrix((0, n_hvg), dtype=np.float32)
+    Xsub = Xsub.astype(np.float32)
+
+    ad_obs = _AnnData(Xsub)
+    obs_names = np.asarray(adata.obs_names)
+    var_names = np.asarray(adata.var_names)
+    ad_obs.obs_names = obs_names[cell_idx]
+    ad_obs.var_names = var_names[sel]
+
+    logger.info(
+        "chunked_scrublet_prepare: materialised %d x %d raw-count HVG subset "
+        "(out-of-core selection; ~%.1f MB sparse)",
+        int(cell_idx.size), n_hvg, Xsub.data.nbytes / 1e6,
+    )
+    return ad_obs, hvg_mask, n_hvg
 
 
 def materialise_for_pca(
