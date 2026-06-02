@@ -44,11 +44,17 @@ ONDISK_MB = {
     "ts_immune": 18858.0, "ts_1M": 15439.3,
 }
 
+# All six configurations are plotted in parallel in the headline figures /
+# table: four CPU storage/scaling backends plus the two cpu-gpu-mixed
+# variants (of ov-oom and ov-anndata). The mixed RSS curves coincide with
+# their CPU twins (mode-invariant), which is itself a result.
 CONFIGS = [
-    ("ov-anndata",          "ov + anndata (in-mem, dense scale)"),
-    ("ov-anndata-implicit", "ov + anndata (in-mem, implicit scale v0.1.7)"),
-    ("scanpy-backed",       "scanpy + backed='r'"),
-    ("ov-oom",              "ov + anndataoom (OOM)"),
+    ("ov-anndata",          "ov-anndata (in-mem, dense)"),
+    ("ov-anndata-implicit", "ov-anndata (in-mem, implicit)"),
+    ("scanpy-backed",       "scanpy (backed='r')"),
+    ("ov-oom",              "ov-oom (anndataoom)"),
+    ("ov-oom-mixed",        "ov-oom (cpu-gpu-mixed)"),
+    ("ov-anndata-mixed",    "ov-anndata (cpu-gpu-mixed)"),
 ]
 
 CONFIG_COLOR = {
@@ -56,6 +62,8 @@ CONFIG_COLOR = {
     "ov-anndata-implicit": "#7a89d4",   # lighter blue (variant of in-mem)
     "scanpy-backed":       "#9a6ba8",   # muted violet
     "ov-oom":              "#e89148",   # the omicverse orange
+    "ov-oom-mixed":        "#b5471f",   # darker orange (ov-oom + GPU)
+    "ov-anndata-mixed":    "#3f9e7a",   # teal-green (ov-anndata + GPU)
 }
 
 
@@ -221,13 +229,15 @@ def table_headline(res):
     v0.1.7), scanpy backed='r', ov-oom. ``--`` denotes runs that hit
     the per-process RSS cap; ``OOM`` is the wall-clock column for those.
     """
-    cfg_labels = ["ov-anndata", "ov-anndata-implicit",
-                  "scanpy-backed", "ov-oom"]
+    cfg_labels = ["ov-anndata", "ov-anndata-implicit", "scanpy-backed",
+                  "ov-oom", "ov-oom-mixed", "ov-anndata-mixed"]
     cfg_short = {
         "ov-anndata": "ov-anndata",
         "ov-anndata-implicit": r"ov-anndata\textsuperscript{*}",
         "scanpy-backed": "scanpy-backed",
         "ov-oom": "ov-oom",
+        "ov-oom-mixed": r"ov-oom\textsuperscript{G}",
+        "ov-anndata-mixed": r"ov-anndata\textsuperscript{G}",
     }
     # Column groups: each config gets (time, RSS).
     col_spec = "l" + "rr" * len(cfg_labels)
