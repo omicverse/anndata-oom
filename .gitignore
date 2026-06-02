@@ -41,5 +41,12 @@ env/
 # Test artifacts
 /tmp/
 test_*.h5ad
-data/
+# Root-anchored: the benchmark h5ad dir only. (Unanchored `data/` also
+# matched vendored Rust source dirs like vendor/anndata-rs/.../src/data/,
+# silently dropping 18 source files from the commit — keep this anchored.)
+/data/
 tutorials/data/
+
+# Benchmark PCA output arrays (large, regenerable by bench.py)
+benchmark/results/*.pca.npy
+.ipynb_checkpoints/

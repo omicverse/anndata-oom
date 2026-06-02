@@ -39,6 +39,13 @@ from ._chunked_ops import (
     chunked_pca,
     chunked_pearson_residual_variance,
     chunked_highly_variable_genes_pearson,
+    chunked_highly_variable_genes_dispersion,
+    chunked_highly_variable_features_pegasus,
+    PearsonResidualBackedArray,
+    chunked_normalize_pearson_residuals,
+    RegressedBackedArray,
+    chunked_regress,
+    chunked_scrublet_prepare,
     materialise_for_pca,
 )
 from ._centered_sparse import CenteredSparseArray
@@ -75,7 +82,7 @@ def read(path, backed: str = "r", **kwargs) -> AnnDataOOM:
     return AnnDataOOM(rs_adata)
 
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 __all__ = [
     "__version__",
@@ -101,5 +108,12 @@ __all__ = [
     "chunked_pca",
     "chunked_pearson_residual_variance",
     "chunked_highly_variable_genes_pearson",
+    "chunked_highly_variable_genes_dispersion",
+    "chunked_highly_variable_features_pegasus",
+    "PearsonResidualBackedArray",
+    "chunked_normalize_pearson_residuals",
+    "RegressedBackedArray",
+    "chunked_regress",
+    "chunked_scrublet_prepare",
     "materialise_for_pca",
 ]

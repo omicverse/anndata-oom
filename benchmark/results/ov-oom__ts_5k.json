@@ -1,0 +1,46 @@
+{
+  "config": "ov-oom",
+  "mode": "cpu",
+  "device": "cpu",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_5k.h5ad",
+  "input_mb": 130.1,
+  "total_seconds": 36.8785,
+  "stages": {
+    "load": {
+      "seconds": 4.2412,
+      "rss_mb_before": 413.8,
+      "rss_mb_after": 696.5,
+      "rss_mb_delta": 282.7,
+      "gpu_peak_mb": 0.0
+    },
+    "qc": {
+      "seconds": 5.5343,
+      "rss_mb_before": 817.5,
+      "rss_mb_after": 855.3,
+      "rss_mb_delta": 37.8,
+      "gpu_peak_mb": 0.0
+    },
+    "preprocess": {
+      "seconds": 9.3579,
+      "rss_mb_before": 855.3,
+      "rss_mb_after": 857.1,
+      "rss_mb_delta": 1.8,
+      "gpu_peak_mb": 0.0
+    },
+    "scale": {
+      "seconds": 1.4243,
+      "rss_mb_before": 857.1,
+      "rss_mb_after": 857.2,
+      "rss_mb_delta": 0.1,
+      "gpu_peak_mb": 0.0
+    },
+    "pca": {
+      "seconds": 1.9908,
+      "rss_mb_before": 857.2,
+      "rss_mb_after": 866.7,
+      "rss_mb_delta": 9.5,
+      "gpu_peak_mb": 0.0
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

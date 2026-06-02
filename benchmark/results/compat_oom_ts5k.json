@@ -1,0 +1,341 @@
+{
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_5k.h5ad",
+  "tracks": [
+    {
+      "backend": "oom",
+      "mode": "cpu",
+      "results": [
+        {
+          "name": "qc",
+          "seconds": 5.017,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "preprocess",
+          "seconds": 9.526,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "highly_variable_features in var"
+        },
+        {
+          "name": "scale",
+          "seconds": 1.48,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "scaled layer present"
+        },
+        {
+          "name": "pca",
+          "seconds": 10.653,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "X_pca in obsm"
+        },
+        {
+          "name": "neighbors",
+          "seconds": 10.317,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "leiden",
+          "seconds": 0.162,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "louvain",
+          "seconds": 0.165,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "umap",
+          "seconds": 1.024,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "tsne",
+          "seconds": 23.438,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "mde",
+          "seconds": 3.011,
+          "gpu_mb": 63.0,
+          "status": "ok"
+        },
+        {
+          "name": "sude",
+          "seconds": 8.353,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "score_genes_cell_cycle",
+          "seconds": 7.019,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "filter_cells",
+          "seconds": 2.253,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "filter_genes",
+          "seconds": 2.393,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "normalize_total",
+          "seconds": 1.62,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "log1p",
+          "seconds": 0.248,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_genes",
+          "seconds": 0.558,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "identify_robust_genes",
+          "seconds": 0.003,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_features",
+          "seconds": 12.092,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "regress",
+          "seconds": 16.171,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "scrublet",
+          "seconds": 15.836,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "normalize_pearson_residuals",
+          "seconds": 7.726,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "anndata_to_GPU",
+          "status": "fail",
+          "seconds": 0.004,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 564, in anndata_to_GPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        },
+        {
+          "name": "anndata_to_CPU",
+          "status": "fail",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 611, in anndata_to_CPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "oom",
+      "mode": "cpu-gpu-mixed",
+      "results": [
+        {
+          "name": "qc",
+          "seconds": 4.765,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "preprocess",
+          "seconds": 9.119,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "highly_variable_features in var"
+        },
+        {
+          "name": "scale",
+          "seconds": 1.437,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "scaled layer present"
+        },
+        {
+          "name": "pca",
+          "seconds": 9.118,
+          "gpu_mb": 0.0,
+          "status": "ok",
+          "detail": "X_pca in obsm"
+        },
+        {
+          "name": "neighbors",
+          "seconds": 0.135,
+          "gpu_mb": 81.9,
+          "status": "ok"
+        },
+        {
+          "name": "leiden",
+          "seconds": 0.228,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "louvain",
+          "seconds": 0.218,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "umap",
+          "seconds": 3.434,
+          "gpu_mb": 537.9,
+          "status": "ok"
+        },
+        {
+          "name": "tsne",
+          "seconds": 27.323,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "mde",
+          "seconds": 1.471,
+          "gpu_mb": 31.3,
+          "status": "ok"
+        },
+        {
+          "name": "sude",
+          "status": "fail",
+          "seconds": 1.096,
+          "gpu_mb": 37.4,
+          "error": "ValueError: Input X contains NaN.\nNearestNeighbors does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and R",
+          "tb": [
+            "    raise ValueError(msg_err)",
+            "ValueError: Input X contains NaN.",
+            "NearestNeighbors does not accept missing values encoded as NaN natively. For supervised learning, you might want to consider sklearn.ensemble.HistGradientBoostingClassifier and Regressor which accept missing values encoded as NaNs natively. Alternatively, it is possible to preprocess the data, for instance by using an imputer transformer in a pipeline or drop samples with missing values. See https://scikit-learn.org/stable/modules/impute.html You can find a list of all estimators that handle NaN values at the following page: https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values"
+          ]
+        },
+        {
+          "name": "score_genes_cell_cycle",
+          "seconds": 7.343,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "filter_cells",
+          "seconds": 2.201,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "filter_genes",
+          "seconds": 2.265,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "normalize_total",
+          "seconds": 1.637,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "log1p",
+          "seconds": 0.253,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_genes",
+          "seconds": 0.56,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "identify_robust_genes",
+          "seconds": 0.002,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "highly_variable_features",
+          "seconds": 11.395,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "regress",
+          "seconds": 11.643,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "scrublet",
+          "seconds": 13.208,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "normalize_pearson_residuals",
+          "seconds": 8.021,
+          "gpu_mb": 0.0,
+          "status": "ok"
+        },
+        {
+          "name": "anndata_to_GPU",
+          "status": "fail",
+          "seconds": 0.004,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 564, in anndata_to_GPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        },
+        {
+          "name": "anndata_to_CPU",
+          "status": "fail",
+          "seconds": 0.005,
+          "gpu_mb": 0.0,
+          "error": "ModuleNotFoundError: No module named 'rapids_singlecell'",
+          "tb": [
+            "  File \"/scratch/users/steorra/analysis/omicverse_dev/omicverse/omicverse/pp/_preprocess.py\", line 611, in anndata_to_CPU",
+            "    import rapids_singlecell as rsc",
+            "ModuleNotFoundError: No module named 'rapids_singlecell'"
+          ]
+        }
+      ]
+    }
+  ]
+}

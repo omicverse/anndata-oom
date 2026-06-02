@@ -1,0 +1,46 @@
+{
+  "config": "ov-anndata-implicit",
+  "mode": "cpu",
+  "device": "cpu",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_10k.h5ad",
+  "input_mb": 222.5,
+  "total_seconds": 29.137,
+  "stages": {
+    "load": {
+      "seconds": 3.2027,
+      "rss_mb_before": 476.2,
+      "rss_mb_after": 1194.7,
+      "rss_mb_delta": 718.5,
+      "gpu_peak_mb": 0.0
+    },
+    "qc": {
+      "seconds": 5.5676,
+      "rss_mb_before": 1281.6,
+      "rss_mb_after": 1340.2,
+      "rss_mb_delta": 58.6,
+      "gpu_peak_mb": 0.0
+    },
+    "preprocess": {
+      "seconds": 11.8536,
+      "rss_mb_before": 1340.2,
+      "rss_mb_after": 1842.3,
+      "rss_mb_delta": 502.1,
+      "gpu_peak_mb": 0.0
+    },
+    "scale": {
+      "seconds": 1.819,
+      "rss_mb_before": 1842.3,
+      "rss_mb_after": 2144.0,
+      "rss_mb_delta": 301.7,
+      "gpu_peak_mb": 0.0
+    },
+    "pca": {
+      "seconds": 1.3923,
+      "rss_mb_before": 2144.0,
+      "rss_mb_after": 2213.7,
+      "rss_mb_delta": 69.7,
+      "gpu_peak_mb": 0.0
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

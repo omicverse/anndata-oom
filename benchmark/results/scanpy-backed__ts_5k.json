@@ -1,0 +1,46 @@
+{
+  "config": "scanpy-backed",
+  "mode": "cpu",
+  "device": "cpu",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_5k.h5ad",
+  "input_mb": 130.1,
+  "total_seconds": 10.0377,
+  "stages": {
+    "load": {
+      "seconds": 0.4066,
+      "rss_mb_before": 530.5,
+      "rss_mb_after": 621.8,
+      "rss_mb_delta": 91.4,
+      "gpu_peak_mb": 0.0
+    },
+    "qc": {
+      "seconds": 1.7684,
+      "rss_mb_before": 621.8,
+      "rss_mb_after": 974.1,
+      "rss_mb_delta": 352.3,
+      "gpu_peak_mb": 0.0
+    },
+    "preprocess": {
+      "seconds": 1.3558,
+      "rss_mb_before": 974.1,
+      "rss_mb_after": 1134.9,
+      "rss_mb_delta": 160.8,
+      "gpu_peak_mb": 0.0
+    },
+    "scale": {
+      "seconds": 1.5921,
+      "rss_mb_before": 1134.9,
+      "rss_mb_after": 3295.9,
+      "rss_mb_delta": 2161.0,
+      "gpu_peak_mb": 0.0
+    },
+    "pca": {
+      "seconds": 0.9857,
+      "rss_mb_before": 3295.9,
+      "rss_mb_after": 3300.6,
+      "rss_mb_delta": 4.8,
+      "gpu_peak_mb": 0.0
+    },
+    "_pca_key": "X_pca"
+  }
+}

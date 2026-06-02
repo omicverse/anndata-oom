@@ -1,0 +1,19 @@
+\begin{tabular}{llrrrrrr}
+\toprule
+Backend & Dataset & \multicolumn{2}{c}{cpu} & \multicolumn{3}{c}{cpu-gpu-mixed} & speedup \\
+& & t (s) & RSS (MB) & t (s) & RSS (MB) & GPU (MB) & $t_{\mathrm{cpu}}/t_{\mathrm{mix}}$ \\
+\midrule
+OOM (anndataoom) & TS-5k & 36.9 & 866.7 & 24.4 & 922.9 & 0.0 & 1.51 \\
+OOM (anndataoom) & TS-10k & 39.5 & 927.8 & 38.0 & 936.9 & 0.0 & 1.04 \\
+OOM (anndataoom) & TS-Vasc & 151.9 & 1160.2 & 144.9 & 1125.8 & 0.0 & 1.05 \\
+OOM (anndataoom) & TS-Stromal & 668.5 & 2196.2 & 682.3 & 2028.0 & 0.0 & 0.98 \\
+OOM (anndataoom) & TS-Epi & 800.7 & 2017.6 & 821.5 & 2028.7 & 0.0 & 0.97 \\
+OOM (anndataoom) & TS-Immune & 1476.6 & 3261.8 & 1371.0 & 3272.7 & 0.0 & 1.08 \\
+OOM (anndataoom) & TS-1M & 2688.7 & 5168.7 & 2810.7 & 4940.9 & 0.0 & 0.96 \\
+in-memory dense & TS-5k & 20.3 & 2711.5 & 21.1 & 3144.1 & 324.4 & 0.96 \\
+in-memory dense & TS-10k & 32.2 & 4716.8 & 32.3 & 5124.2 & 400.7 & 1.00 \\
+in-memory dense & TS-Vasc & 151.7 & 20095.3 & 150.7 & 20365.2 & 898.9 & 1.01 \\
+in-memory dense & TS-Stromal & 766.9 & 99371.0 & 849.1 & 99104.4 & 3798.6 & 0.90 \\
+in-memory dense & TS-Epi & 880.1 & 106938.9 & 923.7 & 106605.5 & 3728.1 & 0.95 \\
+\bottomrule
+\end{tabular}

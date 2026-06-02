@@ -1,0 +1,46 @@
+{
+  "config": "ov-anndata-implicit",
+  "mode": "cpu",
+  "device": "cpu",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_vasculature.h5ad",
+  "input_mb": 2081.8,
+  "total_seconds": 151.2181,
+  "stages": {
+    "load": {
+      "seconds": 35.5278,
+      "rss_mb_before": 476.2,
+      "rss_mb_after": 8521.5,
+      "rss_mb_delta": 8045.3,
+      "gpu_peak_mb": 0.0
+    },
+    "qc": {
+      "seconds": 38.9263,
+      "rss_mb_before": 6654.2,
+      "rss_mb_after": 6691.6,
+      "rss_mb_delta": 37.3,
+      "gpu_peak_mb": 0.0
+    },
+    "preprocess": {
+      "seconds": 59.3776,
+      "rss_mb_before": 6691.6,
+      "rss_mb_after": 7992.6,
+      "rss_mb_delta": 1301.0,
+      "gpu_peak_mb": 0.0
+    },
+    "scale": {
+      "seconds": 7.6898,
+      "rss_mb_before": 7992.6,
+      "rss_mb_after": 9291.3,
+      "rss_mb_delta": 1298.7,
+      "gpu_peak_mb": 0.0
+    },
+    "pca": {
+      "seconds": 3.6645,
+      "rss_mb_before": 9291.3,
+      "rss_mb_after": 9404.1,
+      "rss_mb_delta": 112.8,
+      "gpu_peak_mb": 0.0
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}

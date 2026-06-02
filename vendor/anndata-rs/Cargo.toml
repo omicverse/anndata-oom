@@ -1,0 +1,17 @@
+# Trimmed vendored workspace: only the crates anndataoom actually depends
+# on (pyanndata → anndata → anndata-hdf5). The upstream fork also ships
+# `anndata-test-utils`, `anndata-zarr` and a standalone `python` binding
+# package; none are referenced here, so they are dropped to keep the
+# vendored tree minimal.
+[workspace]
+members = [
+    "anndata",
+    "anndata-hdf5",
+    "pyanndata",
+]
+resolver = "2"
+
+[workspace.dependencies]
+anndata = { path = "anndata" }
+anndata-hdf5 = { path = "anndata-hdf5" }
+pyanndata = { path = "pyanndata" }

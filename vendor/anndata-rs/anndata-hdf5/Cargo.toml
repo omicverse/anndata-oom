@@ -1,0 +1,40 @@
+[package]
+name = "anndata-hdf5"
+version = "0.5.2"
+edition = "2021"
+rust-version = "1.65"
+authors = ["Kai Zhang <kai@kzhang.org>"]
+description = "HDF5 backend for the anndata package"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/kaizhang/anndata-rs"
+homepage = "https://github.com/kaizhang/anndata-rs"
+
+[dependencies]
+anndata = { workspace = true }
+anyhow = "1.0"
+itertools = "0.14"
+hdf5 = { package = "hdf5-metno", version = "0.12.3", features = ["blosc", "blosc-zstd"] }
+blosc-src = { version = "0.3.0", features = ["zstd"] }
+libz-sys = { version = "1", features = ["libc"], default-features = false }
+ndarray = "0.17"
+
+[dev-dependencies]
+tempfile = "3.2"
+rand = "0.8.5"
+ndarray-rand = "0.16"
+
+# hdf5-sys provides the vendored static HDF5. The `threadsafe` feature is
+# gated OFF on Windows: HDF5's CMake refuses thread-safety with a static
+# library on Windows (`CMakeLists.txt:995: thread-safety option not
+# supported with static library`), and hdf5-metno-src only sets
+# HDF5_ALLOW_UNSUPPORTED=ON for the threadsafe+HL combo — not
+# threadsafe+static — so the build hard-fails there. POSIX builds
+# thread-safe static fine via pthreads, so it stays enabled everywhere
+# except Windows. anndataoom's reads are single-threaded / GIL-driven, so
+# dropping thread-safety on Windows is functionally a no-op for this crate.
+[target.'cfg(not(windows))'.dependencies]
+hdf5-sys = { package = "hdf5-metno-sys", version = "0.11", features = ["static", "zlib", "threadsafe"] }
+
+[target.'cfg(windows)'.dependencies]
+hdf5-sys = { package = "hdf5-metno-sys", version = "0.11", features = ["static", "zlib"] }

@@ -1,0 +1,46 @@
+{
+  "config": "ov-anndata-implicit",
+  "mode": "cpu",
+  "device": "cpu",
+  "input": "/scratch/users/steorra/analysis/anndataoom_benchmark/data/ts_epithelial.h5ad",
+  "input_mb": 11066.5,
+  "total_seconds": 866.8866,
+  "stages": {
+    "load": {
+      "seconds": 203.5368,
+      "rss_mb_before": 476.2,
+      "rss_mb_after": 43916.3,
+      "rss_mb_delta": 43440.1,
+      "gpu_peak_mb": 0.0
+    },
+    "qc": {
+      "seconds": 241.015,
+      "rss_mb_before": 33457.8,
+      "rss_mb_after": 33475.8,
+      "rss_mb_delta": 18.0,
+      "gpu_peak_mb": 0.0
+    },
+    "preprocess": {
+      "seconds": 345.9303,
+      "rss_mb_before": 33475.8,
+      "rss_mb_after": 40411.8,
+      "rss_mb_delta": 6936.1,
+      "gpu_peak_mb": 0.0
+    },
+    "scale": {
+      "seconds": 44.8736,
+      "rss_mb_before": 40411.8,
+      "rss_mb_after": 47433.8,
+      "rss_mb_delta": 7022.0,
+      "gpu_peak_mb": 0.0
+    },
+    "pca": {
+      "seconds": 13.2293,
+      "rss_mb_before": 47433.8,
+      "rss_mb_after": 47831.9,
+      "rss_mb_delta": 398.1,
+      "gpu_peak_mb": 0.0
+    },
+    "_pca_key": "scaled|original|X_pca"
+  }
+}
