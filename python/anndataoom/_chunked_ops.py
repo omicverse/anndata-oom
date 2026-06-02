@@ -1186,6 +1186,147 @@ def chunked_highly_variable_genes_pearson(
     logger.info("Extracted %d highly variable genes (pearson residuals, chunked)", n_top_genes)
 
 
+def _chunked_mean_var_expm1(X, *, expm1: bool, chunk_size: int):
+    """Per-gene mean/var in one chunked pass, optionally on expm1(X).
+
+    ``np.expm1`` maps 0 -> 0, so for a sparse chunk we apply it to
+    ``chunk.data`` only and never densify -- the pass stays out-of-core
+    even when un-logging back to (normalised) count space, which is what
+    the scanpy ``seurat`` flavour does before computing dispersions.
+    """
+    n_vars = X.shape[1]
+    mean = np.zeros(n_vars, dtype=np.float64)
+    M2 = np.zeros(n_vars, dtype=np.float64)
+    count = 0
+    for start, end, chunk in X.chunked(chunk_size):
+        batch_size = chunk.shape[0]
+        if issparse(chunk):
+            if expm1:
+                chunk = chunk.copy()
+                chunk.data = np.expm1(chunk.data)
+            batch_sum = np.asarray(chunk.sum(axis=0), dtype=np.float64).ravel()
+            batch_sq = np.asarray(chunk.multiply(chunk).sum(axis=0),
+                                  dtype=np.float64).ravel()
+            batch_mean = batch_sum / batch_size
+            batch_ssd = batch_sq - batch_size * batch_mean * batch_mean
+            np.clip(batch_ssd, 0.0, None, out=batch_ssd)
+        else:
+            chunk = np.asarray(chunk, dtype=np.float64)
+            if expm1:
+                chunk = np.expm1(chunk)
+            batch_mean = chunk.mean(axis=0)
+            batch_ssd = chunk.var(axis=0) * batch_size
+        new_count = count + batch_size
+        delta = batch_mean - mean
+        mean = mean + delta * (batch_size / new_count)
+        M2 = M2 + batch_ssd + (delta ** 2) * (count * batch_size / new_count)
+        count = new_count
+    return mean, M2 / max(count - 1, 1)
+
+
+def chunked_highly_variable_genes_dispersion(
+    adata,
+    *,
+    flavor: str = "seurat",
+    n_top_genes: int | None = None,
+    n_bins: int = 20,
+    min_mean: float = 0.0125,
+    max_mean: float = 3.0,
+    min_disp: float = 0.5,
+    max_disp: float = np.inf,
+    layer: str | None = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> None:
+    """Dispersion-based HVG (Seurat / Cell Ranger), fully chunked.
+
+    The non-Pearson counterpart to
+    :func:`chunked_highly_variable_genes_pearson`. Only per-gene mean and
+    variance touch the matrix (one chunked pass via
+    :func:`_chunked_mean_var_expm1`); the binning + within-bin dispersion
+    normalisation that follows is all O(n_vars) work on small arrays, so
+    the whole thing is out-of-core and matches scanpy's
+    ``flavor='seurat'`` / ``'cell_ranger'`` selection.
+
+    ``seurat`` expects log-transformed input and un-logs it (``expm1``)
+    before computing dispersions; ``cell_ranger`` uses the matrix as-is.
+    """
+    import pandas as pd
+
+    if layer is not None and layer in adata.layers:
+        X = adata.layers[layer]
+    else:
+        X = adata.X
+
+    mean, var = _chunked_mean_var_expm1(
+        X, expm1=(flavor == "seurat"), chunk_size=chunk_size)
+
+    mean[mean == 0] = 1e-12
+    dispersion = var / mean
+    if flavor == "seurat":
+        dispersion[dispersion == 0] = np.nan
+        with np.errstate(invalid="ignore"):
+            dispersion = np.log(dispersion)
+        mean = np.log1p(mean)
+
+    df = pd.DataFrame({"means": mean, "dispersions": dispersion},
+                      index=adata.var.index)
+
+    if flavor == "seurat":
+        df["mean_bin"] = pd.cut(df["means"], bins=n_bins)
+        grp = df.groupby("mean_bin", observed=True)["dispersions"]
+        disp_mean = grp.transform("mean")
+        disp_std = grp.transform("std", ddof=1)
+        # one-gene bins -> std is NaN; scanpy falls back to the dispersion
+        one_gene = disp_std.isnull()
+        disp_std[one_gene] = disp_mean[one_gene].values
+        disp_mean[one_gene] = 0.0
+    elif flavor == "cell_ranger":
+        from statistics import NormalDist  # noqa: F401  (kept light)
+        edges = np.r_[-np.inf,
+                      np.percentile(df["means"],
+                                    np.arange(10, 105, 5)),  # 20 bins
+                      np.inf]
+        df["mean_bin"] = pd.cut(df["means"], bins=np.unique(edges))
+        grp = df.groupby("mean_bin", observed=True)["dispersions"]
+        disp_mean = grp.transform("median")
+        # MAD-based scale, matching scanpy's cell_ranger
+        def _mad(x):
+            return np.median(np.abs(x - np.median(x)))
+        disp_mad = grp.transform(_mad)
+        disp_std = disp_mad * 1.4826
+        disp_std[disp_std == 0] = np.nan
+    else:
+        raise ValueError(
+            f"chunked dispersion HVG supports flavor 'seurat' or "
+            f"'cell_ranger', got {flavor!r}")
+
+    df["dispersions_norm"] = ((df["dispersions"].values - disp_mean.values)
+                              / disp_std.values)
+
+    dn = df["dispersions_norm"].values
+    if n_top_genes is not None:
+        order = np.argsort(np.nan_to_num(dn, nan=-np.inf))[::-1]
+        hv = np.zeros(len(df), dtype=bool)
+        hv[order[:n_top_genes]] = True
+        # rank for downstream (1-based, NaN for non-selected)
+        rank = np.full(len(df), np.nan)
+        rank[order[:n_top_genes]] = np.arange(1, min(n_top_genes, len(df)) + 1)
+        df["highly_variable_rank"] = rank
+    else:
+        hv = ((df["means"].values > min_mean) & (df["means"].values < max_mean)
+              & (dn > min_disp) & (dn < max_disp))
+
+    df["highly_variable"] = hv
+
+    for col in ("means", "dispersions", "dispersions_norm",
+                "highly_variable", "highly_variable_rank"):
+        if col in df.columns:
+            adata.var[col] = df[col].values
+
+    logger.info("Extracted %d highly variable genes (%s dispersion, chunked)",
+                int(hv.sum()), flavor)
+
+
 def materialise_for_pca(
     adata: AnnDataOOM,
     layer: str = "scaled",

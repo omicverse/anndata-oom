@@ -39,6 +39,7 @@ from ._chunked_ops import (
     chunked_pca,
     chunked_pearson_residual_variance,
     chunked_highly_variable_genes_pearson,
+    chunked_highly_variable_genes_dispersion,
     materialise_for_pca,
 )
 from ._centered_sparse import CenteredSparseArray
@@ -101,5 +102,6 @@ __all__ = [
     "chunked_pca",
     "chunked_pearson_residual_variance",
     "chunked_highly_variable_genes_pearson",
+    "chunked_highly_variable_genes_dispersion",
     "materialise_for_pca",
 ]
