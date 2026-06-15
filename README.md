@@ -33,6 +33,13 @@ preprocessing pipeline in chunks. Peak RAM is independent of dataset size.
 | 100k cells × 30k genes | ~12 GB            | **~700 MB**       | 17x     |
 | 1M cells × 30k genes   | ~120 GB (OOM)     | **~700 MB**       | 170x    |
 
+> Measured end-to-end on a Tabula Sapiens series (5k–1,053,033 cells × 60,606
+> genes, full `qc → preprocess → scale → PCA` pipeline, 256 GB cap): peak RSS
+> stays ≈ 0.9–5.0 GB while in-memory and `backed` configurations are
+> OOM-killed beyond ~228k cells. The 1.05M-cell run finishes in **44.8 min at
+> 5.0 GB peak** — the only configuration that completes it. See
+> [`benchmark/`](benchmark/).
+
 ### How?
 
 Each preprocessing step adds a small "transform descriptor" (a vector or
@@ -266,9 +273,10 @@ What changes (measured on the Tabula Sapiens benchmark, H100):
 
 ### omicverse function compatibility
 
-Compatibility of `ov.pp.*` against an `AnnDataOOM` backend — **14 of 24
+Compatibility of `ov.pp.*` against an `AnnDataOOM` backend — **22 of 24
 probed functions** run on the OOM path (probed in both `cpu` and
-`cpu-gpu-mixed`; `ᴳ` = offloads to GPU in mixed mode):
+`cpu-gpu-mixed`; `ᴳ` = offloads to GPU in mixed mode, `◐` = bounded
+materialisation of only the HVG subset):
 
 | function | OOM | notes |
 |---|:---:|---|
@@ -276,11 +284,13 @@ probed functions** run on the OOM path (probed in both `cpu` and
 | `scale`, `pca` | ✅ | lazy / chunked, CPU |
 | `neighbors`ᴳ, `umap`ᴳ, `leiden`, `louvain` | ✅ | operate on `X_pca` only |
 | `tsne`, `mde`ᴳ, `sude` | ✅ | embeddings on `X_pca` (`sude` errors in mixed) |
-| `highly_variable_genes`, `highly_variable_features` (standalone) | ❌ | use the fused HVG inside `preprocess` |
-| `normalize_pearson_residuals` | ❌ | not yet OOM-adapted |
-| `regress` | ❌ | forwards to scanpy `regress_out` (densifies) |
-| `filter_cells`, `filter_genes` | ❌ | not yet OOM-adapted |
-| `scrublet`, `score_genes_cell_cycle` | ❌ | backed `var` lookup |
+| `filter_cells`, `filter_genes` | ✅ | chunked stat pass + lazy `_inplace_subset_*` |
+| `highly_variable_genes` | ✅ | chunked; `seurat`/`cell_ranger` (dispersion) + `pearson` |
+| `highly_variable_features` | ✅ | chunked pegasus (mean/var pass + LOESS) |
+| `normalize_pearson_residuals` | ✅ | lazy `PearsonResidualBackedArray` (analytic, Lause 2021) |
+| `regress` | ✅ | lazy `RegressedBackedArray`; one chunked OLS pass; honours custom `keys` |
+| `score_genes_cell_cycle` | ✅ | per-cell gene-set means over small column reads |
+| `scrublet` | ◐ | materialises only the HVG subset (`n_obs × n_HVG`), not the full matrix |
 | `anndata_to_GPU` / `anndata_to_CPU` | ➖ | require optional `rapids_singlecell` |
 
 Failures raise a clear exception at the call site — they never silently
@@ -300,6 +310,8 @@ mis-compute. Reproduce with
 | `oom.BackedArray`                   | Lazy row-chunked wrapper over anndata-rs X           |
 | `oom.TransformedBackedArray`        | Lazy normalize / log1p transform chain node          |
 | `oom.ScaledBackedArray`             | Lazy z-score transform                               |
+| `oom.PearsonResidualBackedArray`    | Lazy analytic Pearson-residual transform             |
+| `oom.RegressedBackedArray`          | Lazy covariate regress-out transform                 |
 | `oom.is_oom(obj)`                   | Check if `obj` is an `AnnDataOOM`                    |
 | `oom.oom_guard(...)`                | Decorator: auto-materialise for in-memory functions  |
 | `oom.concat(adatas)`                | Concatenate multiple AnnData                         |
@@ -316,7 +328,12 @@ mis-compute. Reproduce with
 | `chunked_identify_robust_genes(adata)`      | Filter low-expression genes                        |
 | `chunked_highly_variable_genes_pearson(...)`| Pearson residuals HVG selection (2 passes)         |
 | `chunked_scale(adata)`                      | Lazy z-score                                       |
-| `chunked_pca(adata)`                        | Randomized SVD with chunked matrix products        |
+| `chunked_pca(adata)`                        | Randomized SVD, 3-path (materialise / implicit / Halko) |
+| `chunked_highly_variable_genes_dispersion(...)`| Seurat / Cell Ranger dispersion HVG (chunked)   |
+| `chunked_highly_variable_features_pegasus(...)`| Pegasus HVF (mean/var pass + LOESS)             |
+| `chunked_normalize_pearson_residuals(...)`  | Lazy analytic Pearson residuals (Lause 2021)       |
+| `chunked_regress(adata, keys=...)`          | Covariate regress-out — one chunked OLS pass       |
+| `chunked_scrublet_prepare(adata)`           | Bounded HVG-subset prep for out-of-core Scrublet   |
 
 ### `AnnDataOOM` methods
 
@@ -414,9 +431,13 @@ SnapATAC2).
 
 - **Writing back to X is lazy** — modifications via `adata[mask] = value` materialize
   X in memory. Use `adata.obs`, `adata.obsm`, or `adata.write(path)` to persist changes.
-- **PCA accuracy**: `chunked_pca` uses randomized SVD with 4 power iterations —
-  top ~20 PCs are nearly identical to standard PCA; PCs 30+ start to deviate.
-  For publication-quality analyses, consider `adata.to_adata()` + standard PCA.
+- **PCA**: `chunked_pca` auto-selects among three paths. By default it subsets to
+  the HVGs first (effective `n_vars` ≈ 2,000), materialises just that block, and
+  runs sklearn `randomized_svd` as a single in-memory SVD — bit-identical to
+  standard PCA on the leading components used downstream (`|cos| = 1.0`). When the
+  HVG block does not fit, it runs an implicit-centering randomized SVD over the
+  sparse normalize+log1p view without densifying; a per-chunk Halko path is the
+  fallback. `n_power_iters` (default 4) is tunable.
 - **Some ops require materialization**: `score_genes_cell_cycle`, `find_markers`,
   non-Harmony batch correction, etc. These auto-materialize with a warning.
 - **File mode**: Default `backed='r'` (read-only) protects the source file.
@@ -466,7 +487,8 @@ pytest tests/
 
 Contributions welcome! Areas of interest:
 
-- **More lazy transforms**: regress-out, harmony, scVI integration
+- **More lazy transforms**: Harmony, scVI integration (regress-out, Pearson
+  residuals, and dispersion/pegasus HVG are now implemented)
 - **Zarr backend**: currently only HDF5 supported
 - **Dask interop**: expose `BackedArray` as a `dask.array`
 - **Query engine**: SQL-like filtering over chunks
