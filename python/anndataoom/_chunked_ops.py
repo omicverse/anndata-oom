@@ -290,7 +290,8 @@ def chunked_normalize_total(
             logger.info("Excluding %d highly-expressed genes from normalization", n_excluded)
 
         # Second pass: recompute row sums using only non-highly-expressed genes.
-        # (Pearson-HVG precompute uses the unfiltered sums from above.)
+        # The Pearson-HVG precompute keeps the unfiltered sums from above.
+        pearson_cells = counts_per_cell.copy()
         gene_indices = np.where(gene_subset)[0]
         counts_per_cell = np.zeros(n_obs, dtype=np.float64)
         for start, end, chunk in X.chunked(chunk_size):
@@ -303,6 +304,7 @@ def chunked_normalize_total(
     else:
         # Single pass: per-cell sums + per-gene totals + per-gene E[count^2].
         counts_per_cell = np.zeros(n_obs, dtype=np.float64)
+        pearson_cells = counts_per_cell
         for start, end, chunk in X.chunked(chunk_size):
             if issparse(chunk):
                 counts_per_cell[start:end] = np.asarray(
@@ -339,7 +341,7 @@ def chunked_normalize_total(
     # n_obs is included so the consumer can detect a stale precompute if the
     # caller subsets the adata between normalize_total and HVG.
     adata.uns["_pearson_precompute"] = {
-        "sums_cells": counts_per_cell.copy(),
+        "sums_cells": pearson_cells.copy(),
         "sums_genes": sums_genes,
         "sq_sums_genes": sq_sums_genes,
         "sum_total": float(sums_genes.sum()),
