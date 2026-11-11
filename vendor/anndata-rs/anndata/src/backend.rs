@@ -352,7 +352,10 @@ impl<B: Backend> DataContainer<B> {
             }
             "dataframe" => DataType::DataFrame,
             "mapping" | "dict" => DataType::Mapping,
-            "nullable-integer" | "nullable-boolean" => DataType::NullableArray,
+            // "nullable-string-array": anndata >= 0.13 with pandas >= 3 strings;
+            // "nullable-string": what this crate writes for string series with nulls.
+            "nullable-integer" | "nullable-boolean" | "nullable-string-array"
+            | "nullable-string" => DataType::NullableArray,
             ty => bail!("the anndata file contains an unsupported encoding type: '{}'", ty),
         };
         Ok(ty)

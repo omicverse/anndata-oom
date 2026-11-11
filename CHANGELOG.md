@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.9
+
+### Fixes
+- **Pearson HVGs after `exclude_highly_expressed`.** With
+  `chunked_normalize_total(exclude_highly_expressed=True)` the per-cell totals
+  without the highly expressed genes (used for the size factors) were also
+  stored in `_pearson_precompute`, so `chunked_highly_variable_genes_pearson`
+  computed every residual with the wrong totals (lung200k: residual variance
+  up to 3.8x off, 1963/2000 HVGs vs scanpy; SEA-AD MALAT1 -17%). The
+  precompute now keeps each cell's total over all genes; residual variances
+  equal scanpy's.
+- **Files written by anndata >= 0.13 with pandas >= 3.** Those store string
+  indices and string columns as `nullable-string-array` groups;
+  `anndataoom.read` panicked with "not a dataset". The vendored anndata-rs now
+  reads them (index from `values`, string columns with their missing values),
+  and also reads back its own `nullable-string` columns. Column slicing
+  (`read_select`) opens groups as well as datasets.
+
+### Build / CI
+- macos-14 runners are retired: tests run on macos-15. Wheels on macOS and
+  Windows are built for Python 3.9-3.14 explicitly (the Windows runner's
+  default Python 3.15 is newer than PyO3 supports).
+
 ## 0.1.8
 
 ### Performance

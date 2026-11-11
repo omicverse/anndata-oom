@@ -71,7 +71,7 @@ impl Writable for DataFrame {
                 }
             }
             let n = self.height();
-            if n != 0 && n != container.as_group()?.open_dataset(&index_name)?.shape()[0] {
+            if n != 0 && n != index_values::<B>(container.as_group()?, &index_name)?.shape()[0] {
                 DataFrameIndex::from(self.height()).overwrite(&mut container)?;
             }
         } else {
@@ -159,7 +159,7 @@ impl ReadableArray for DataFrame {
     fn get_shape<B: Backend>(container: &DataContainer<B>) -> Result<Shape> {
         let group = container.as_group()?;
         let index: String = group.get_attr("_index")?;
-        let nrows = group.open_dataset(&index)?.shape()[0];
+        let nrows = index_values::<B>(group, &index)?.shape()[0];
         let columns: Vec<String> = container.get_attr("column-order")?;
         Ok((nrows, columns.len()).into())
     }
@@ -175,10 +175,7 @@ impl ReadableArray for DataFrame {
                 .iter()
                 .map(|i| {
                     let name = &columns[i];
-                    let series = container
-                        .as_group()?
-                        .open_dataset(name)
-                        .map(DataContainer::Dataset)
+                    let series = DataContainer::<B>::open(container.as_group()?, name)
                         .and_then(|x| read_series::<B>(&x))
                         .with_context(|| format!("Failed to read series: {}", name))?;
 
@@ -243,7 +240,7 @@ impl DataFrameIndex {
 
     pub(crate) fn read<B: Backend>(container: &DataContainer<B>) -> Result<Self> {
         let index_name: String = container.get_attr("_index")?;
-        let dataset = container.as_group()?.open_dataset(&index_name)?;
+        let dataset = index_values::<B>(container.as_group()?, &index_name)?;
         match dataset
             .get_attr::<String>("index_type")
             .as_ref()
@@ -404,6 +401,20 @@ fn write_column<B: Backend, G: GroupOp<B>>(
             .collect::<CategoricalArray>()
             .write(location, name),
         other => bail!("Unsupported series data type: {:?}", other),
+    }
+}
+
+/// The dataset holding a dataframe index: the index itself, or the `values`
+/// of a `nullable-string-array` group (anndata >= 0.13 writes string indices
+/// that way with pandas >= 3; an index has no missing values, so the mask is
+/// not needed).
+fn index_values<B: Backend>(group: &B::Group, name: &str) -> Result<B::Dataset> {
+    match group.open_dataset(name) {
+        Ok(d) => Ok(d),
+        Err(e) => group
+            .open_group(name)
+            .and_then(|g| g.open_dataset("values"))
+            .map_err(|_| e),
     }
 }
 

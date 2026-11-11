@@ -152,3 +152,35 @@ def test_stale_precompute_rejected(synthetic_h5ad):
             )
     finally:
         adata.close()
+
+
+def test_precompute_keeps_full_totals_with_exclude_highly_expressed(tmp_path):
+    """exclude_highly_expressed leaves the dominant genes out of the size
+    factors only; Pearson residuals still use each cell's total over all
+    genes, as scanpy (regression: the reduced totals leaked into the
+    precompute and shifted every gene's residual variance)."""
+    import anndata as ad
+    import scanpy as sc
+    import anndataoom as oom
+
+    rng = np.random.default_rng(11)
+    n, g = 1500, 200
+    lam = rng.gamma(0.5, 2.0, size=g) * rng.lognormal(0, 0.5, size=(n, 1))
+    lam[:, 0] *= 60  # gene 0 dominates -> excluded from the size factors
+    X = sp.csr_matrix(rng.poisson(lam).astype(np.float32))
+    ref = ad.AnnData(X)
+    path = tmp_path / "hi.h5ad"
+    ref.write_h5ad(path)
+
+    adata = _open(path)
+    try:
+        oom.chunked_normalize_total(adata, target_sum=1e4, exclude_highly_expressed=True,
+                                    max_fraction=0.05)
+        np.testing.assert_allclose(adata.uns["_pearson_precompute"]["sums_cells"],
+                                   np.asarray(X.sum(axis=1)).ravel())
+        oom.chunked_highly_variable_genes_pearson(adata, layer="counts", n_top_genes=50)
+        got = np.asarray(adata.var["residual_variances"])
+    finally:
+        adata.close()
+    sc.experimental.pp.highly_variable_genes(ref, flavor="pearson_residuals", n_top_genes=50)
+    np.testing.assert_allclose(got, ref.var["residual_variances"].values, rtol=1e-5)

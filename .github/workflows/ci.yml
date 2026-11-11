@@ -34,10 +34,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-13 (Intel) GitHub-hosted runners are deprecated and queue
-        # then cancel/timeout; macos-14 (ARM) covers macOS test coverage and
-        # release.yml still builds the macos x86_64 wheel via cibuildwheel.
-        os: [ubuntu-latest, macos-14, windows-latest]
+        # macos-13/14 GitHub-hosted runners are retired; macos-15 (ARM)
+        # covers macOS tests and release.yml still builds the x86_64 wheel.
+        os: [ubuntu-latest, macos-15, windows-latest]
         python: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v4
